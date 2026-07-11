@@ -331,6 +331,21 @@
   .point.top .checker    { top: 1cqw; }
   .point.bottom .checker { bottom: 1cqw; }
 
+  /* Plakoto: a lone checker trapped under the covering stack — a hollow
+     ring in the trapped checker's own colour, sized to peek out from
+     behind the stack sitting on top of it. */
+  .checker.pinned {
+    z-index: 0;
+    width: 110cqw;
+    background: transparent;
+    border: 2.6cqw solid;
+    box-shadow:
+      0 0 0 2cqw rgba(20,12,6,0.6),
+      0 0 0 3.8cqw rgba(245,195,80,0.7);
+  }
+  .checker.pinned.w { border-color: var(--ivory-hi); }
+  .checker.pinned.b { border-color: var(--horn-hi); }
+
   /* ---------- Move interaction ---------- */
   .point.movable,
   .point.legal { cursor: pointer; }
@@ -580,7 +595,7 @@
   // White (ivory) runs 24 -> 1, home 1-6.  Black (horn) runs 1 -> 24, home 19-24.
   function emptyPoints() {
     const p = {};
-    for (let i = 1; i <= 24; i++) p[i] = { color: null, count: 0 };
+    for (let i = 1; i <= 24; i++) p[i] = { color: null, count: 0, pinned: null };
     return p;
   }
 
@@ -629,7 +644,7 @@
   function loadStart() {
     state.points = emptyPoints();
     const start = VARIANTS[state.variant].start;
-    for (const [pt, [c, n]] of Object.entries(start)) state.points[pt] = { color: c, count: n };
+    for (const [pt, [c, n]] of Object.entries(start)) state.points[pt] = { color: c, count: n, pinned: null };
     state.bar = { w: 0, b: 0 };
     state.off = { w: 0, b: 0 };
   }
@@ -676,6 +691,14 @@
     pip.className = 'pip';
     pip.textContent = num;
     el.appendChild(pip);
+
+    if (cell.pinned) {
+      el.title = `${NAME[cell.pinned]} checker pinned here`;
+      const p = document.createElement('div');
+      p.className = `checker ${cell.pinned} pinned`;
+      if (row === 'top') p.style.top = '1cqw'; else p.style.bottom = '1cqw';
+      el.appendChild(p);
+    }
 
     renderCheckers(el, row, cell);
 
@@ -827,12 +850,11 @@
   function isBlocked(dest, color) {
     const c = state.points[dest];
     if (c.color !== other(color)) return false;
-    const block = state.variant === 'plakoto' ? 1 : 2;   // Plakoto P1: contact blocks
-    return c.count >= block;
+    return c.count >= 2;   // a lone blot never blocks — Portes hits it, Plakoto pins it
   }
   function landable(dest, color) {
     if (dest < 1 || dest > 24) return false;   // bearing off arrives in step 5
-    return !isBlocked(dest, color);            // a lone opponent blot can be hit
+    return !isBlocked(dest, color);            // a lone opponent blot can be hit or pinned
   }
 
   const destFor  = (origin, die, color) => color === 'w' ? origin - die : origin + die;
@@ -840,8 +862,12 @@
 
   function canBearOff(color) {
     if (state.bar[color] > 0) return false;
-    if (color === 'w') { for (let p = 7; p <= 24; p++) if (state.points[p].color === 'w') return false; }
-    else               { for (let p = 1; p <= 18; p++) if (state.points[p].color === 'b') return false; }
+    // A checker pinned outside home is still stuck there — it hasn't come home either.
+    if (color === 'w') {
+      for (let p = 7; p <= 24; p++) if (state.points[p].color === 'w' || state.points[p].pinned === 'w') return false;
+    } else {
+      for (let p = 1; p <= 18; p++) if (state.points[p].color === 'b' || state.points[p].pinned === 'b') return false;
+    }
     return true;
   }
   function farthestDist(color) {
@@ -936,6 +962,19 @@
     state.legal = [];
   }
 
+  // A point's covering stack just emptied. If it was pinning a lone enemy
+  // checker underneath, that checker is freed back into play; otherwise the
+  // point simply goes empty.
+  function freeOrClear(cell) {
+    if (cell.pinned) {
+      cell.color = cell.pinned;
+      cell.count = 1;
+      cell.pinned = null;
+    } else {
+      cell.color = null;
+    }
+  }
+
   function performMove(origin, dest) {
     const color = state.current;
 
@@ -945,7 +984,7 @@
       if (idx !== -1) state.dice.splice(idx, 1);
       const from = state.points[origin];
       from.count -= 1;
-      if (from.count === 0) from.color = null;
+      if (from.count === 0) freeOrClear(from);
       state.off[color] += 1;
       state.openingWin = false;
       state.justRolled = false;
@@ -968,13 +1007,17 @@
     } else {
       const from = state.points[origin];
       from.count -= 1;
-      if (from.count === 0) from.color = null;
+      if (from.count === 0) freeOrClear(from);
     }
 
-    // land — hitting a lone opponent checker onto the bar
+    // land — Portes hits a lone blot to the bar; Plakoto pins it in place instead
     const to = state.points[dest];
     if (to.color === other(color) && to.count === 1) {
-      state.bar[other(color)] += 1;
+      if (state.variant === 'plakoto') {
+        to.pinned = to.color;
+      } else {
+        state.bar[other(color)] += 1;
+      }
       to.color = color;
       to.count = 1;
     } else if (to.count === 0) {
@@ -1145,7 +1188,8 @@
     let kind = 'single', pts = 1;
     if (state.off[loser] === 0) {
       const home = winner === 'w' ? [1, 2, 3, 4, 5, 6] : [19, 20, 21, 22, 23, 24];
-      const trapped = state.bar[loser] > 0 || home.some((p) => state.points[p].color === loser);
+      const trapped = state.bar[loser] > 0 ||
+        home.some((p) => state.points[p].color === loser || state.points[p].pinned === loser);
       kind = trapped ? 'backgammon' : 'gammon';
       pts = trapped ? 3 : 2;
     }
