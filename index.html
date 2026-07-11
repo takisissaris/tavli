@@ -629,8 +629,7 @@
     24: ['w', 2],
   };
 
-  // Registry of the three tavli games. Only Portes has rules so far;
-  // Plakoto and Fevga are placeholders that later steps will fill in.
+  // Registry of the three tavli games.
   const VARIANTS = {
     portes:  { id: 'portes',  el: 'Πόρτες',  en: 'Portes',  start: PORTES_START,
                desc: 'The classic race — hit a lone checker to the bar.', ready: true },
@@ -638,7 +637,8 @@
                start: { 24: ['w', 15], 1: ['b', 15] },
                desc: 'Pin the opponent instead of hitting.', ready: true },
     fevga:   { id: 'fevga',   el: 'Φέβγα',   en: 'Fevga',
-               desc: 'Same direction, no contact — a pure race.', ready: false },
+               start: { 24: ['w', 15], 12: ['b', 15] },
+               desc: 'Same direction, no contact — a pure race.', ready: true },
   };
 
   function loadStart() {
@@ -847,9 +847,25 @@
   // ---- Move rules ----
   const uniqueDice = () => [...new Set(state.dice)];
 
+  // White always runs 24 -> 1, home 1-6, in every variant. Black runs 1 -> 24,
+  // home 19-24 in Portes/Plakoto (contact games); in Fevga black instead runs
+  // the *same* rotational direction as white (decreasing, wrapping 1 -> 24),
+  // starting from 12 and homing in 13-18 — so the two races run in parallel
+  // rather than meeting head-on.
+  function homeRange(color) {
+    if (color === 'w') return [1, 6];
+    return state.variant === 'fevga' ? [13, 18] : [19, 24];
+  }
+  function distToOff(origin, color) {
+    if (color === 'w') return origin;
+    return state.variant === 'fevga' ? origin - 12 : 25 - origin;
+  }
+
   function isBlocked(dest, color) {
     const c = state.points[dest];
     if (c.color !== other(color)) return false;
+    // Fevga: no hitting, no pinning — a single checker blocks the point outright.
+    if (state.variant === 'fevga') return c.count >= 1;
     return c.count >= 2;   // a lone blot never blocks — Portes hits it, Plakoto pins it
   }
   function landable(dest, color) {
@@ -857,23 +873,28 @@
     return !isBlocked(dest, color);            // a lone opponent blot can be hit or pinned
   }
 
-  const destFor  = (origin, die, color) => color === 'w' ? origin - die : origin + die;
-  const entryFor = (die, color)         => color === 'w' ? 25 - die : die;
+  function destFor(origin, die, color) {
+    if (color === 'w') return origin - die;
+    if (state.variant === 'fevga') { const d = origin - die; return d < 1 ? d + 24 : d; }
+    return origin + die;
+  }
+  const entryFor = (die, color) => color === 'w' ? 25 - die : die;
 
   function canBearOff(color) {
     if (state.bar[color] > 0) return false;
+    const [lo, hi] = homeRange(color);
     // A checker pinned outside home is still stuck there — it hasn't come home either.
-    if (color === 'w') {
-      for (let p = 7; p <= 24; p++) if (state.points[p].color === 'w' || state.points[p].pinned === 'w') return false;
-    } else {
-      for (let p = 1; p <= 18; p++) if (state.points[p].color === 'b' || state.points[p].pinned === 'b') return false;
+    for (let p = 1; p <= 24; p++) {
+      if (p >= lo && p <= hi) continue;
+      const c = state.points[p];
+      if (c.color === color || c.pinned === color) return false;
     }
     return true;
   }
   function farthestDist(color) {
+    const [lo, hi] = homeRange(color);
     let far = 0;
-    if (color === 'w') { for (let p = 1; p <= 6; p++)   if (state.points[p].color === 'w') far = Math.max(far, p); }
-    else               { for (let p = 19; p <= 24; p++) if (state.points[p].color === 'b') far = Math.max(far, 25 - p); }
+    for (let p = lo; p <= hi; p++) if (state.points[p].color === color) far = Math.max(far, distToOff(p, color));
     return far;
   }
   // The die needed to bear a checker off this point, or null if not permitted.
@@ -882,7 +903,7 @@
     if (typeof origin !== 'number' || !canBearOff(color)) return null;
     const cell = state.points[origin];
     if (cell.color !== color || cell.count === 0) return null;
-    const dist = color === 'w' ? origin : 25 - origin;
+    const dist = distToOff(origin, color);
     const far = farthestDist(color);
     const cands = uniqueDice().filter((d) => d === dist || (d > dist && dist === far));
     return cands.length ? Math.min(...cands) : null;
@@ -995,8 +1016,16 @@
     }
 
     let die;
-    if (origin === 'bar') die = color === 'w' ? 25 - dest : dest;
-    else                  die = color === 'w' ? origin - dest : dest - origin;
+    if (origin === 'bar') {
+      die = color === 'w' ? 25 - dest : dest;
+    } else if (color === 'w') {
+      die = origin - dest;
+    } else if (state.variant === 'fevga') {
+      const raw = origin - dest;
+      die = raw > 0 ? raw : raw + 24;
+    } else {
+      die = dest - origin;
+    }
 
     const idx = state.dice.indexOf(die);
     if (idx !== -1) state.dice.splice(idx, 1);
@@ -1187,9 +1216,11 @@
     const loser = other(winner);
     let kind = 'single', pts = 1;
     if (state.off[loser] === 0) {
-      const home = winner === 'w' ? [1, 2, 3, 4, 5, 6] : [19, 20, 21, 22, 23, 24];
-      const trapped = state.bar[loser] > 0 ||
-        home.some((p) => state.points[p].color === loser || state.points[p].pinned === loser);
+      const [lo, hi] = homeRange(winner);
+      let trapped = state.bar[loser] > 0;
+      for (let p = lo; p <= hi && !trapped; p++) {
+        if (state.points[p].color === loser || state.points[p].pinned === loser) trapped = true;
+      }
       kind = trapped ? 'backgammon' : 'gammon';
       pts = trapped ? 3 : 2;
     }
