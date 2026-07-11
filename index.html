@@ -1,0 +1,1231 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Τάβλι · Πόρτες</title>
+<style>
+  :root {
+    --wood-dark:  #241610;
+    --wood-mid:   #3a2416;
+    --wood-edge:  #6b4a2e;
+    --felt:       #33463a;
+    --felt-dark:  #283a30;
+    --pt-light:   #e6d2ab;
+    --pt-light-2: #cdb488;
+    --pt-dark:    #a9603a;
+    --pt-dark-2:  #8a4a29;
+    --ivory:      #f2e6cd;
+    --ivory-edge: #c7ad82;
+    --ivory-hi:   #fffaf0;
+    --horn:       #47331f;
+    --horn-2:     #1b110a;
+    --horn-hi:    #6d4e30;
+    --ink:        #efe4cc;
+    --ink-dim:    #a58b62;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    min-height: 100%;
+  }
+
+  body {
+    background:
+      radial-gradient(120% 90% at 50% 0%, #241b15 0%, #17110d 60%, #100b08 100%);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: safe center;
+    gap: clamp(10px, 2.5vh, 24px);
+    padding: clamp(12px, 3vw, 28px);
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+
+  /* ---------- Header ---------- */
+  .masthead {
+    text-align: center;
+    line-height: 1;
+  }
+  .masthead .eyebrow {
+    font-family: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+    letter-spacing: 0.55em;
+    text-indent: 0.55em;
+    font-size: clamp(11px, 1.6vw, 14px);
+    color: var(--ink-dim);
+    text-transform: uppercase;
+  }
+  .masthead .title {
+    font-family: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+    font-size: clamp(30px, 6vw, 52px);
+    font-weight: 600;
+    margin-top: 0.18em;
+    color: var(--ivory);
+    text-shadow: 0 1px 0 #000, 0 0 22px rgba(226,196,140,0.12);
+  }
+  .masthead .romanization {
+    font-size: clamp(10px, 1.4vw, 13px);
+    letter-spacing: 0.32em;
+    text-indent: 0.32em;
+    color: var(--ink-dim);
+    margin-top: 0.5em;
+    text-transform: uppercase;
+  }
+
+  /* ---------- Screens ---------- */
+  .screen {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: clamp(10px, 2.5vh, 24px);
+    width: 100%;
+  }
+  .screen.active { display: flex; }
+
+  /* ---------- Menu ---------- */
+  .menu-list {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(10px, 1.6vh, 14px);
+    width: 100%;
+    max-width: 520px;
+  }
+  .menu-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    width: 100%;
+    text-align: left;
+    padding: clamp(14px, 2.4vw, 18px) clamp(16px, 2.6vw, 20px);
+    border-radius: 14px;
+    border: 1px solid rgba(230,210,171,0.14);
+    background: linear-gradient(150deg, #2c1d12, #211510);
+    color: var(--ink);
+    font-family: inherit;
+    cursor: pointer;
+    transition: transform 130ms ease, border-color 130ms ease, background 130ms ease;
+  }
+  .menu-card:hover:not([disabled]) {
+    transform: translateY(-2px);
+    border-color: rgba(230,210,171,0.4);
+    background: linear-gradient(150deg, #34241688, #2a1c12);
+  }
+  .menu-card:focus-visible { outline: 3px solid #e6d2ab; outline-offset: 3px; }
+  .menu-card[disabled] { cursor: default; opacity: 0.5; }
+  .mc-greek {
+    font-family: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+    font-size: clamp(24px, 5vw, 32px);
+    color: var(--ivory);
+    min-width: 2.6em;
+    line-height: 1;
+  }
+  .mc-body { flex: 1; }
+  .mc-name {
+    font-size: clamp(13px, 2vw, 15px);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .mc-desc { font-size: clamp(13px, 2vw, 15px); margin-top: 4px; color: var(--ink); opacity: 0.82; }
+  .soon {
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    padding: 2px 7px;
+    border-radius: 999px;
+    border: 1px solid rgba(230,210,171,0.35);
+    color: var(--ink-dim);
+  }
+  .mc-go { font-size: 22px; color: var(--ink-dim); }
+  .menu-card[disabled] .mc-go { display: none; }
+
+  /* ---------- Game top bar & score ---------- */
+  .topbar {
+    width: 100%;
+    max-width: 900px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 0 2px;
+  }
+  .link {
+    background: none;
+    border: none;
+    color: var(--ink-dim);
+    font-family: inherit;
+    font-size: clamp(13px, 1.8vw, 15px);
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    padding: 4px 2px;
+  }
+  .link:hover { color: var(--ink); }
+  .link:focus-visible { outline: 2px solid #e6d2ab; outline-offset: 3px; border-radius: 4px; }
+  .game-name {
+    flex: 1;
+    text-align: center;
+    font-family: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+    font-size: clamp(18px, 3.2vw, 26px);
+    color: var(--ivory);
+  }
+  .score { display: flex; gap: 12px; align-items: center; }
+  .score .side {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-variant-numeric: tabular-nums;
+    font-size: clamp(14px, 2vw, 16px);
+    color: var(--ink);
+  }
+  .score .dot {
+    width: 0.9em; height: 0.9em; border-radius: 50%;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.3);
+  }
+  .score .dot.w { background: radial-gradient(circle at 36% 30%, var(--ivory-hi), var(--ivory-edge)); }
+  .score .dot.b { background: radial-gradient(circle at 36% 30%, var(--horn-hi), var(--horn-2)); }
+
+  /* ---------- Board frame ---------- */
+  .tavli {
+    container-type: inline-size;
+    width: 100%;
+    max-width: min(900px, 72vh);
+  }
+  .frame {
+    display: flex;
+    gap: 1.6cqw;
+    padding: 2.6cqw;
+    border-radius: 2.4cqw;
+    background:
+      linear-gradient(150deg, var(--wood-mid), var(--wood-dark));
+    box-shadow:
+      inset 0 0 0 0.35cqw rgba(0,0,0,0.5),
+      inset 0 0 2.4cqw rgba(0,0,0,0.55),
+      0 1.2cqw 3.4cqw rgba(0,0,0,0.55),
+      0 0 0 0.18cqw var(--wood-edge);
+  }
+
+  /* ---------- Play area ---------- */
+  .play {
+    flex: 13;
+    aspect-ratio: 13 / 10;
+    display: flex;
+    flex-direction: column;
+    background:
+      radial-gradient(140% 120% at 50% 50%, var(--felt) 0%, var(--felt-dark) 100%);
+    border-radius: 0.8cqw;
+    box-shadow: inset 0 0 2.2cqw rgba(0,0,0,0.55);
+    overflow: hidden;
+    position: relative;
+  }
+  /* faint centre seam */
+  .play::after {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; top: 50%;
+    height: 0.25cqw;
+    transform: translateY(-50%);
+    background: rgba(0,0,0,0.28);
+    pointer-events: none;
+  }
+
+  .half {
+    flex: 1;
+    display: flex;
+  }
+  .quad {
+    flex: 6;
+    display: flex;
+  }
+  .bar {
+    flex: 1;
+    background: linear-gradient(90deg, #1c110a, #33200f, #1c110a);
+    box-shadow:
+      inset 0.2cqw 0 0.4cqw rgba(0,0,0,0.5),
+      inset -0.2cqw 0 0.4cqw rgba(0,0,0,0.5);
+    position: relative;
+    z-index: 3;
+  }
+
+  /* ---------- Points (triangles) ---------- */
+  .point {
+    container-type: inline-size;
+    flex: 1;
+    position: relative;
+  }
+  .point::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+  }
+  .point.top::before    { clip-path: polygon(0 0, 100% 0, 50% 86%); }
+  .point.bottom::before { clip-path: polygon(50% 14%, 0 100%, 100% 100%); }
+
+  .point.light::before {
+    background: linear-gradient(180deg, var(--pt-light) 0%, var(--pt-light-2) 100%);
+  }
+  .point.dark::before {
+    background: linear-gradient(180deg, var(--pt-dark) 0%, var(--pt-dark-2) 100%);
+  }
+  .point.bottom.light::before {
+    background: linear-gradient(0deg, var(--pt-light) 0%, var(--pt-light-2) 100%);
+  }
+  .point.bottom.dark::before {
+    background: linear-gradient(0deg, var(--pt-dark) 0%, var(--pt-dark-2) 100%);
+  }
+
+  /* point number labels on the frame edge */
+  .pip {
+    position: absolute;
+    left: 0; right: 0;
+    text-align: center;
+    font-size: 3.1cqw;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-dim);
+    opacity: 0.55;
+    z-index: 0;
+  }
+  .point.top .pip    { top: -4.6cqw; }
+  .point.bottom .pip { bottom: -4.6cqw; }
+
+  /* ---------- Checkers ---------- */
+  .checker {
+    position: absolute;
+    left: 50%;
+    width: 84cqw;
+    aspect-ratio: 1;
+    transform: translateX(-50%);
+    border-radius: 50%;
+    z-index: 1;
+    display: grid;
+    place-items: center;
+    font-size: 30cqw;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+  }
+  .checker.w {
+    background:
+      radial-gradient(circle at 38% 30%, var(--ivory-hi) 0%, var(--ivory) 42%, var(--ivory-edge) 100%);
+    box-shadow:
+      inset 0 0 0 3cqw rgba(255,255,255,0.35),
+      inset 0 0 0 6cqw rgba(150,120,70,0.20),
+      0 0.8cqw 1.2cqw rgba(0,0,0,0.35);
+    color: #5c4a2c;
+  }
+  .checker.b {
+    background:
+      radial-gradient(circle at 38% 30%, var(--horn-hi) 0%, var(--horn) 40%, var(--horn-2) 100%);
+    box-shadow:
+      inset 0 0 0 3cqw rgba(255,225,180,0.10),
+      inset 0 0 0 6cqw rgba(0,0,0,0.28),
+      0 0.8cqw 1.2cqw rgba(0,0,0,0.45);
+    color: var(--ivory);
+  }
+  .point.top .checker    { top: 1cqw; }
+  .point.bottom .checker { bottom: 1cqw; }
+
+  /* ---------- Move interaction ---------- */
+  .point.movable,
+  .point.legal { cursor: pointer; }
+  .point.legal::before { filter: brightness(1.3) saturate(1.15); }
+  .point.selected .checker:last-of-type {
+    filter: drop-shadow(0 0 2cqw rgba(245,225,170,0.95));
+  }
+  /* legal-move marker — a bold amber disc at the point's tip, drawn above checkers.
+     NB: .point is a size container, so cqw here is % of the POINT width. */
+  .target {
+    position: absolute;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 62cqw;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    z-index: 60;
+    pointer-events: none;
+    background: radial-gradient(circle at 40% 34%, #ffd873 0%, #eda63c 58%, #c9822b 100%);
+    box-shadow: 0 0 0 5cqw rgba(26,15,6,0.8),
+                0 0 16cqw 4cqw rgba(240,190,90,0.85);
+  }
+  .point.top .target    { top: 72%; }
+  .point.bottom .target { bottom: 72%; }
+
+  /* checkers resting on the bar (bar is not a size container, so size vs. board) */
+  .checker.onbar { width: 5.4cqw; font-size: 2.4cqw; }
+  .bar.movable { cursor: pointer; }
+  .bar.selected .checker:last-of-type {
+    filter: drop-shadow(0 0 1.6cqw rgba(245,225,170,0.95));
+  }
+
+  /* ---------- Bear-off tray ---------- */
+  .bearoff {
+    flex: 1.5;
+    display: flex;
+    flex-direction: column;
+    gap: 3cqw;
+    padding: 1.4cqw;
+    border-radius: 0.8cqw;
+    background: linear-gradient(150deg, #1d120b, #120b07);
+    box-shadow: inset 0 0 1.8cqw rgba(0,0,0,0.6);
+  }
+  .tray {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    border-radius: 0.6cqw;
+    border: 0.2cqw solid rgba(0,0,0,0.45);
+    box-shadow: inset 0 0 1.4cqw rgba(0,0,0,0.5);
+  }
+  .tray.legal {
+    cursor: pointer;
+    box-shadow: inset 0 0 0 0.5cqw rgba(245,225,170,0.9),
+                inset 0 0 2.4cqw rgba(245,225,170,0.45);
+  }
+  .offstack {
+    position: absolute;
+    left: 0; right: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5cqw;
+    padding: 1cqw;
+    z-index: 1;
+  }
+  .tray.b .offstack { top: 0; }
+  .tray.w .offstack { bottom: 0; flex-direction: column-reverse; }
+  .offchip { width: 74%; height: 2.2cqw; border-radius: 1.2cqw; }
+  .offchip.w {
+    background: linear-gradient(180deg, var(--ivory) 0%, var(--ivory-edge) 100%);
+    box-shadow: 0 0.3cqw 0.5cqw rgba(0,0,0,0.4);
+  }
+  .offchip.b {
+    background: linear-gradient(180deg, var(--horn-hi) 0%, var(--horn-2) 100%);
+    box-shadow: 0 0.3cqw 0.5cqw rgba(0,0,0,0.5);
+  }
+  .tray span {
+    position: absolute;
+    left: 0; right: 0;
+    text-align: center;
+    z-index: 0;
+    font-family: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+    font-size: 3.2cqw;
+    letter-spacing: 0.14em;
+    color: var(--ink-dim);
+    opacity: 0.6;
+    text-transform: uppercase;
+  }
+  .tray.b span { bottom: 1.2cqw; }
+  .tray.w span { top: 1.2cqw; }
+
+  /* ---------- Caption ---------- */
+  .caption {
+    text-align: center;
+    color: var(--ink-dim);
+    font-size: clamp(12px, 1.7vw, 15px);
+    letter-spacing: 0.02em;
+    max-width: 40ch;
+  }
+
+  /* ---------- Dice ---------- */
+  .dice-layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 6;
+  }
+  .dice-row {
+    position: absolute;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    gap: 2.4cqw;
+  }
+  .dice-row.w { top: 67%; }   /* White's side (lower half) */
+  .dice-row.b { top: 33%; }   /* Black's side (upper half) */
+
+  .die {
+    width: 8.6cqw;
+    aspect-ratio: 1;
+    border-radius: 1.8cqw;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    padding: 1.3cqw;
+    box-shadow: 0 0.9cqw 1.6cqw rgba(0,0,0,0.5);
+  }
+  .die.w {
+    background: radial-gradient(circle at 34% 28%, var(--ivory-hi) 0%, var(--ivory) 45%, var(--ivory-edge) 100%);
+  }
+  .die.b {
+    background: radial-gradient(circle at 34% 28%, var(--horn-hi) 0%, var(--horn) 42%, var(--horn-2) 100%);
+  }
+  .die .cell { display: grid; place-items: center; }
+  .die .cell.on::after {
+    content: "";
+    width: 62%;
+    aspect-ratio: 1;
+    border-radius: 50%;
+  }
+  .die.w .cell.on::after {
+    background: #3a2a18;
+    box-shadow: inset 0 0.25cqw 0.4cqw rgba(0,0,0,0.55);
+  }
+  .die.b .cell.on::after {
+    background: var(--ivory);
+    box-shadow: inset 0 0.25cqw 0.4cqw rgba(0,0,0,0.35);
+  }
+
+  /* ---------- Controls ---------- */
+  .controls {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: clamp(9px, 1.8vh, 15px);
+    min-height: 92px;
+    text-align: center;
+  }
+  .banner {
+    margin: 0;
+    font-family: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+    font-size: clamp(15px, 2.4vw, 21px);
+    letter-spacing: 0.01em;
+    color: var(--ink);
+  }
+  .banner .who { font-weight: 600; }
+  .banner .who.w { color: #f2e6cd; }
+  .banner .who.b { color: #d79a6b; }
+
+  .btn {
+    font-family: inherit;
+    font-size: clamp(15px, 2.2vw, 18px);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    padding: 0.72em 1.7em;
+    border: none;
+    border-radius: 999px;
+    cursor: pointer;
+    color: #3a2a18;
+    background: linear-gradient(180deg, #f5ead2 0%, #d8c096 100%);
+    box-shadow: 0 2px 0 #a4854f, 0 6px 15px rgba(0,0,0,0.42);
+    transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
+  }
+  .btn:hover { filter: brightness(1.04); }
+  .btn:active {
+    transform: translateY(2px);
+    box-shadow: 0 0 0 #a4854f, 0 3px 9px rgba(0,0,0,0.42);
+  }
+  .btn:focus-visible { outline: 3px solid #e6d2ab; outline-offset: 3px; }
+
+  /* load-in */
+  @media (prefers-reduced-motion: no-preference) {
+    .die.tumble { animation: tumble 460ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+    @keyframes tumble {
+      0%   { opacity: 0; transform: rotate(-38deg) scale(0.55); }
+      62%  { opacity: 1; transform: rotate(7deg) scale(1.06); }
+      100% { transform: none; }
+    }
+    .target { animation: pulse 1.4s ease-in-out infinite; }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.88; transform: translate(-50%, -50%) scale(0.9); }
+      50%      { opacity: 1;    transform: translate(-50%, -50%) scale(1.08); }
+    }
+    .tavli { animation: rise 620ms cubic-bezier(0.22, 0.61, 0.36, 1) both; }
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(10px) scale(0.992); }
+      to   { opacity: 1; transform: none; }
+    }
+  }
+</style>
+</head>
+<body>
+  <!-- Menu -->
+  <section id="menu" class="screen">
+    <header class="masthead">
+      <div class="eyebrow">Παίξε</div>
+      <h1 class="title">Τάβλι</h1>
+      <div class="romanization">Tavli — three games, one board</div>
+    </header>
+    <div class="menu-list" id="menuList"></div>
+  </section>
+
+  <!-- Game -->
+  <section id="game" class="screen">
+    <div class="topbar">
+      <button class="link" id="toMenu" type="button">‹ Menu</button>
+      <div class="game-name" id="gameName"></div>
+      <div class="score" id="score"></div>
+    </div>
+
+    <div class="tavli">
+      <div class="frame">
+        <div class="play" id="play"></div>
+        <div class="bearoff" id="bearoff"></div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <p class="banner" id="banner">Roll for the first move.</p>
+      <button class="btn" id="action" type="button">Roll</button>
+    </div>
+  </section>
+
+<script>
+  // ---- Board state (absolute points 1..24) ----
+  // White (ivory) runs 24 -> 1, home 1-6.  Black (horn) runs 1 -> 24, home 19-24.
+  function emptyPoints() {
+    const p = {};
+    for (let i = 1; i <= 24; i++) p[i] = { color: null, count: 0 };
+    return p;
+  }
+
+  const state = {
+    points: emptyPoints(),
+    bar: { w: 0, b: 0 },
+    off: { w: 0, b: 0 },
+    phase: 'openRoll',   // openRoll -> awaitRoll <-> rolled
+    current: null,       // 'w' | 'b'
+    dice: [],            // dice available this turn
+    opening: null,       // { w, b } opening-roll values
+    openTie: false,
+    openingWin: false,   // true on the opening winner's first turn
+    selected: null,      // origin point currently picked up
+    legal: [],           // legal destination points for the selection
+    justRolled: false,   // animate dice only on the roll itself
+    result: null,        // { winner, kind, pts } once a game ends
+    screen: 'menu',      // 'menu' | 'game'
+    variant: null,       // active game id
+    score: { w: 0, b: 0 }, // running match tally
+  };
+
+  const PORTES_START = {
+    1:  ['b', 2],
+    6:  ['w', 5],
+    8:  ['w', 3],
+    12: ['b', 5],
+    13: ['w', 5],
+    17: ['b', 3],
+    19: ['b', 5],
+    24: ['w', 2],
+  };
+
+  // Registry of the three tavli games. Only Portes has rules so far;
+  // Plakoto and Fevga are placeholders that later steps will fill in.
+  const VARIANTS = {
+    portes:  { id: 'portes',  el: 'Πόρτες',  en: 'Portes',  start: PORTES_START,
+               desc: 'The classic race — hit a lone checker to the bar.', ready: true },
+    plakoto: { id: 'plakoto', el: 'Πλακωτό', en: 'Plakoto',
+               start: { 24: ['w', 15], 1: ['b', 15] },
+               desc: 'Pin the opponent instead of hitting.', ready: true },
+    fevga:   { id: 'fevga',   el: 'Φέβγα',   en: 'Fevga',
+               desc: 'Same direction, no contact — a pure race.', ready: false },
+  };
+
+  function loadStart() {
+    state.points = emptyPoints();
+    const start = VARIANTS[state.variant].start;
+    for (const [pt, [c, n]] of Object.entries(start)) state.points[pt] = { color: c, count: n };
+    state.bar = { w: 0, b: 0 };
+    state.off = { w: 0, b: 0 };
+  }
+
+  // ---- Visual layout ----
+  // Top row (left -> right):    13..18 | bar | 19..24
+  // Bottom row (left -> right): 12..7  | bar |  6..1
+  const TOP_LEFT     = [13, 14, 15, 16, 17, 18];
+  const TOP_RIGHT    = [19, 20, 21, 22, 23, 24];
+  const BOTTOM_LEFT  = [12, 11, 10, 9, 8, 7];
+  const BOTTOM_RIGHT = [6, 5, 4, 3, 2, 1];
+
+  function buildQuad(pointNums, row, colOffset) {
+    const quad = document.createElement('div');
+    quad.className = 'quad';
+    pointNums.forEach((num, i) => {
+      const col = colOffset + i;
+      // alternate shade; offset the bottom row so verticals contrast
+      let shade;
+      if (row === 'top') shade = (col % 2 === 0) ? 'light' : 'dark';
+      else               shade = (col % 2 === 0) ? 'dark'  : 'light';
+      quad.appendChild(buildPoint(num, row, shade));
+    });
+    return quad;
+  }
+
+  function buildPoint(num, row, shade) {
+    const el = document.createElement('div');
+    el.className = `point ${row} ${shade}`;
+    el.dataset.point = num;
+
+    const cell = state.points[num];
+    const movePhase = state.phase === 'rolled';
+
+    if (num === state.selected) el.classList.add('selected');
+    if (state.legal.includes(num)) el.classList.add('legal');
+    if (movePhase && state.selected === null &&
+        cell.color === state.current && cell.count > 0 &&
+        legalFrom(num).length) {
+      el.classList.add('movable');
+    }
+
+    const pip = document.createElement('div');
+    pip.className = 'pip';
+    pip.textContent = num;
+    el.appendChild(pip);
+
+    renderCheckers(el, row, cell);
+
+    if (state.legal.includes(num)) {
+      const t = document.createElement('div');
+      t.className = 'target';
+      el.appendChild(t);
+    }
+
+    if (movePhase) el.addEventListener('click', () => onPointTap(num));
+    return el;
+  }
+
+  function buildBar(row) {
+    const bar = document.createElement('div');
+    bar.className = 'bar';
+    const color = row === 'top' ? 'b' : 'w';   // black rests on the top bar, white below
+    const n = state.bar[color];
+    const active = state.phase === 'rolled' && state.current === color && n > 0;
+
+    if (active) {
+      bar.classList.add('movable');
+      if (state.selected === 'bar') bar.classList.add('selected');
+      bar.addEventListener('click', onBarTap);
+    }
+    if (n > 0) {
+      const USABLE = 30, DIAM = 5.4, base = 6;
+      const step = n > 1 ? Math.min(base, (USABLE - DIAM) / (n - 1)) : 0;
+      const overlapping = step < DIAM * 0.7;
+      for (let i = 0; i < n; i++) {
+        const c = document.createElement('div');
+        c.className = `checker ${color} onbar`;
+        const off = `${6 + i * step}cqw`;
+        if (row === 'top') c.style.top = off; else c.style.bottom = off;
+        c.style.zIndex = 1 + i;
+        if (overlapping && i === n - 1) c.textContent = n;
+        bar.appendChild(c);
+      }
+    }
+    return bar;
+  }
+
+  function onBarTap() {
+    if (state.phase !== 'rolled') return;
+    if (state.bar[state.current] > 0) selectOrigin('bar');
+  }
+
+  function renderCheckers(pointEl, row, cell) {
+    const { color, count } = cell;
+    if (!color || count === 0) return;
+
+    // usable length along the point, expressed in cqw (relative to point width)
+    const USABLE = 430;   // ~ point height in cqw
+    const DIAM   = 84;
+    const baseStep = 88;
+    const step = count > 1
+      ? Math.min(baseStep, (USABLE - DIAM) / (count - 1))
+      : 0;
+
+    const overlapping = step < DIAM * 0.7;
+
+    for (let i = 0; i < count; i++) {
+      const c = document.createElement('div');
+      c.className = `checker ${color}`;
+      const offset = `${1 + i * step}cqw`;
+      if (row === 'top') c.style.top = offset;
+      else               c.style.bottom = offset;
+      c.style.zIndex = 1 + i;
+      // when stacked tightly, only label the outermost checker with the count
+      if (overlapping && i === count - 1) c.textContent = count;
+      pointEl.appendChild(c);
+    }
+  }
+
+  function render() {
+    const play = document.getElementById('play');
+    play.innerHTML = '';
+
+    const top = document.createElement('div');
+    top.className = 'half top';
+    top.appendChild(buildQuad(TOP_LEFT, 'top', 0));
+    top.appendChild(buildBar('top'));
+    top.appendChild(buildQuad(TOP_RIGHT, 'top', 6));
+
+    const bottom = document.createElement('div');
+    bottom.className = 'half bottom';
+    bottom.appendChild(buildQuad(BOTTOM_LEFT, 'bottom', 0));
+    bottom.appendChild(buildBar('bottom'));
+    bottom.appendChild(buildQuad(BOTTOM_RIGHT, 'bottom', 6));
+
+    play.appendChild(top);
+    play.appendChild(bottom);
+
+    const diceLayer = document.createElement('div');
+    diceLayer.className = 'dice-layer';
+    diceLayer.id = 'diceLayer';
+    play.appendChild(diceLayer);
+  }
+
+  // ---- Dice ----
+  const PIPS = {
+    1: [4],
+    2: [0, 8],
+    3: [0, 4, 8],
+    4: [0, 2, 6, 8],
+    5: [0, 2, 4, 6, 8],
+    6: [0, 2, 3, 5, 6, 8],
+  };
+  const rollDie = () => 1 + Math.floor(Math.random() * 6);
+  const other = (c) => (c === 'w' ? 'b' : 'w');
+  const NAME = { w: 'White', b: 'Black' };
+
+  function makeDie(value, color, animate) {
+    const die = document.createElement('div');
+    die.className = `die ${color}` + (animate ? ' tumble' : '');
+    const on = PIPS[value];
+    for (let i = 0; i < 9; i++) {
+      const cell = document.createElement('div');
+      cell.className = on.includes(i) ? 'cell on' : 'cell';
+      die.appendChild(cell);
+    }
+    return die;
+  }
+
+  function diceRow(side, values, animate) {
+    const row = document.createElement('div');
+    row.className = `dice-row ${side}`;
+    values.forEach((v) => row.appendChild(makeDie(v, side, animate)));
+    return row;
+  }
+
+  function renderDice() {
+    const layer = document.getElementById('diceLayer');
+    layer.innerHTML = '';
+    const animate = state.justRolled;
+
+    if (state.phase === 'openRoll' && state.opening) {
+      layer.appendChild(diceRow('w', [state.opening.w], animate));
+      layer.appendChild(diceRow('b', [state.opening.b], animate));
+    } else if (state.phase === 'rolled') {
+      layer.appendChild(diceRow(state.current, state.dice, animate));
+    }
+    state.justRolled = false;
+  }
+
+  // ---- Move rules ----
+  const uniqueDice = () => [...new Set(state.dice)];
+
+  function isBlocked(dest, color) {
+    const c = state.points[dest];
+    if (c.color !== other(color)) return false;
+    const block = state.variant === 'plakoto' ? 1 : 2;   // Plakoto P1: contact blocks
+    return c.count >= block;
+  }
+  function landable(dest, color) {
+    if (dest < 1 || dest > 24) return false;   // bearing off arrives in step 5
+    return !isBlocked(dest, color);            // a lone opponent blot can be hit
+  }
+
+  const destFor  = (origin, die, color) => color === 'w' ? origin - die : origin + die;
+  const entryFor = (die, color)         => color === 'w' ? 25 - die : die;
+
+  function canBearOff(color) {
+    if (state.bar[color] > 0) return false;
+    if (color === 'w') { for (let p = 7; p <= 24; p++) if (state.points[p].color === 'w') return false; }
+    else               { for (let p = 1; p <= 18; p++) if (state.points[p].color === 'b') return false; }
+    return true;
+  }
+  function farthestDist(color) {
+    let far = 0;
+    if (color === 'w') { for (let p = 1; p <= 6; p++)   if (state.points[p].color === 'w') far = Math.max(far, p); }
+    else               { for (let p = 19; p <= 24; p++) if (state.points[p].color === 'b') far = Math.max(far, 25 - p); }
+    return far;
+  }
+  // The die needed to bear a checker off this point, or null if not permitted.
+  // Exact distance always works; a larger die works only from the farthest checker.
+  function bearOffDieFor(origin, color) {
+    if (typeof origin !== 'number' || !canBearOff(color)) return null;
+    const cell = state.points[origin];
+    if (cell.color !== color || cell.count === 0) return null;
+    const dist = color === 'w' ? origin : 25 - origin;
+    const far = farthestDist(color);
+    const cands = uniqueDice().filter((d) => d === dist || (d > dist && dist === far));
+    return cands.length ? Math.min(...cands) : null;
+  }
+
+  function legalFrom(origin) {
+    const color = state.current;
+    if (!color) return [];
+    const seen = new Set();
+    const moves = [];
+
+    // On the bar: only re-entry is allowed, nothing else moves.
+    if (state.bar[color] > 0) {
+      if (origin !== 'bar') return [];
+      for (const die of uniqueDice()) {
+        const dest = entryFor(die, color);
+        if (landable(dest, color) && !seen.has(dest)) {
+          seen.add(dest);
+          moves.push({ dest, die });
+        }
+      }
+      return moves;
+    }
+
+    if (origin === 'bar') return [];
+    const cell = state.points[origin];
+    if (cell.color !== color || cell.count === 0) return [];
+    for (const die of uniqueDice()) {
+      const dest = destFor(origin, die, color);
+      if (landable(dest, color) && !seen.has(dest)) {
+        seen.add(dest);
+        moves.push({ dest, die });
+      }
+    }
+    const offDie = bearOffDieFor(origin, color);
+    if (offDie !== null) moves.push({ dest: 'off', die: offDie });
+    return moves;
+  }
+
+  function hasAnyLegalMove(color) {
+    if (state.bar[color] > 0) return legalFrom('bar').length > 0;
+    for (let p = 1; p <= 24; p++) {
+      if (state.points[p].color === color && legalFrom(p).length) return true;
+    }
+    return false;
+  }
+
+  // ---- Selection & movement ----
+  function onPointTap(num) {
+    if (state.phase !== 'rolled') return;
+    const cell = state.points[num];
+    const mine = cell.color === state.current && cell.count > 0;
+
+    if (state.selected === null) {
+      if (mine && legalFrom(num).length) selectOrigin(num);
+      return;
+    }
+    if (state.legal.includes(num)) {
+      performMove(state.selected, num);
+    } else if (num === state.selected) {
+      clearSelection(); refresh();
+    } else if (mine && legalFrom(num).length) {
+      selectOrigin(num);
+    } else {
+      clearSelection(); refresh();
+    }
+  }
+
+  function selectOrigin(num) {
+    state.selected = num;
+    state.legal = legalFrom(num).map((m) => m.dest);
+    refresh();
+  }
+
+  function clearSelection() {
+    state.selected = null;
+    state.legal = [];
+  }
+
+  function performMove(origin, dest) {
+    const color = state.current;
+
+    if (dest === 'off') {
+      const die = bearOffDieFor(origin, color);
+      const idx = state.dice.indexOf(die);
+      if (idx !== -1) state.dice.splice(idx, 1);
+      const from = state.points[origin];
+      from.count -= 1;
+      if (from.count === 0) from.color = null;
+      state.off[color] += 1;
+      state.openingWin = false;
+      state.justRolled = false;
+      clearSelection();
+      if (state.off[color] === 15) { endGame(color); return; }
+      refresh();
+      return;
+    }
+
+    let die;
+    if (origin === 'bar') die = color === 'w' ? 25 - dest : dest;
+    else                  die = color === 'w' ? origin - dest : dest - origin;
+
+    const idx = state.dice.indexOf(die);
+    if (idx !== -1) state.dice.splice(idx, 1);
+
+    // leave the origin
+    if (origin === 'bar') {
+      state.bar[color] -= 1;
+    } else {
+      const from = state.points[origin];
+      from.count -= 1;
+      if (from.count === 0) from.color = null;
+    }
+
+    // land — hitting a lone opponent checker onto the bar
+    const to = state.points[dest];
+    if (to.color === other(color) && to.count === 1) {
+      state.bar[other(color)] += 1;
+      to.color = color;
+      to.count = 1;
+    } else if (to.count === 0) {
+      to.color = color;
+      to.count = 1;
+    } else {
+      to.count += 1;
+    }
+
+    state.openingWin = false;
+    state.justRolled = false;
+    clearSelection();
+    refresh();
+  }
+
+  // ---- Controls / banner ----
+  function who(color) {
+    return `<span class="who ${color}">${NAME[color]}</span>`;
+  }
+
+  function renderControls() {
+    const banner = document.getElementById('banner');
+    const action = document.getElementById('action');
+
+    let text = '';
+    let label = '';
+    let handler = null;
+
+    switch (state.phase) {
+      case 'openRoll':
+        text = state.openTie
+          ? `A tie at ${state.opening.w} apiece — roll again.`
+          : 'Roll for the first move.';
+        label = state.openTie ? 'Roll again' : 'Roll';
+        handler = openingRoll;
+        break;
+      case 'awaitRoll':
+        text = `${who(state.current)} to roll.`;
+        label = 'Roll';
+        handler = turnRoll;
+        break;
+      case 'rolled': {
+        const left = state.dice;
+        const onBar = state.bar[state.current] > 0;
+        const diceTxt = left.length === 4 ? `double ${left[0]}s` : left.join(' &amp; ');
+        if (left.length === 0) {
+          text = `${who(state.current)} — no dice left. Pass the device.`;
+        } else if (onBar && !hasAnyLegalMove(state.current)) {
+          text = `${who(state.current)} is stuck on the bar — pass the device.`;
+        } else if (onBar) {
+          text = `${who(state.current)} — enter from the bar (${diceTxt}).`;
+        } else if (!hasAnyLegalMove(state.current)) {
+          text = `${who(state.current)} has no legal move. Pass the device.`;
+        } else if (state.openingWin) {
+          text = `${who(state.current)} wins the opening — plays ${left.join(' &amp; ')}.`;
+        } else {
+          text = `${who(state.current)} to move — ${diceTxt}.`;
+        }
+        label = 'Pass device';
+        handler = passDevice;
+        break;
+      }
+      case 'gameover': {
+        const { winner, kind, pts } = state.result;
+        const verb = kind === 'single' ? 'wins' : `wins a ${kind}`;
+        text = `${who(winner)} ${verb} — ${pts} point${pts > 1 ? 's' : ''}.`;
+        label = 'Play again';
+        handler = newGame;
+        break;
+      }
+    }
+
+    banner.innerHTML = text;
+    action.textContent = label;
+    action.onclick = handler;
+  }
+
+  function renderTrays() {
+    const bo = document.getElementById('bearoff');
+    bo.innerHTML = '';
+    const canOff = state.phase === 'rolled' &&
+                   typeof state.selected === 'number' &&
+                   state.legal.includes('off');
+
+    [['b', 'top'], ['w', 'bottom']].forEach(([color, pos]) => {
+      const tray = document.createElement('div');
+      tray.className = `tray ${color}`;
+      if (canOff && state.current === color) {
+        tray.classList.add('legal');
+        tray.addEventListener('click', () => performMove(state.selected, 'off'));
+      }
+      const n = state.off[color];
+      const stack = document.createElement('div');
+      stack.className = 'offstack';
+      for (let i = 0; i < n; i++) {
+        const chip = document.createElement('div');
+        chip.className = `offchip ${color}`;
+        stack.appendChild(chip);
+      }
+      tray.appendChild(stack);
+
+      const label = document.createElement('span');
+      label.textContent = n > 0 ? `${n} off` : 'Off';
+      tray.appendChild(label);
+
+      bo.appendChild(tray);
+    });
+  }
+
+  function refresh() {
+    // Force re-entry: if the player has checkers on the bar, the bar is the only origin.
+    if (state.phase === 'rolled' && state.current && state.bar[state.current] > 0) {
+      state.selected = 'bar';
+      state.legal = legalFrom('bar').map((m) => m.dest);
+    }
+    if (state.screen === 'game') {
+      render();
+      renderDice();
+      renderTrays();
+      renderControls();
+      renderTopbar();
+    }
+    showScreen();
+  }
+
+  // ---- Actions ----
+  function openingRoll() {
+    const w = rollDie(), b = rollDie();
+    state.opening = { w, b };
+    state.justRolled = true;
+    if (w === b) {
+      state.openTie = true;
+      state.phase = 'openRoll';
+    } else {
+      state.openTie = false;
+      state.current = w > b ? 'w' : 'b';
+      state.dice = [w, b];
+      state.openingWin = true;
+      state.phase = 'rolled';
+      clearSelection();
+    }
+    refresh();
+  }
+
+  function turnRoll() {
+    const a = rollDie(), b = rollDie();
+    state.dice = (a === b) ? [a, a, a, a] : [a, b];
+    state.justRolled = true;
+    state.openingWin = false;
+    state.phase = 'rolled';
+    clearSelection();
+    refresh();
+  }
+
+  function passDevice() {
+    state.current = other(state.current);
+    state.dice = [];
+    state.opening = null;
+    state.openTie = false;
+    state.openingWin = false;
+    state.phase = 'awaitRoll';
+    clearSelection();
+    refresh();
+  }
+
+  function endGame(winner) {
+    const loser = other(winner);
+    let kind = 'single', pts = 1;
+    if (state.off[loser] === 0) {
+      const home = winner === 'w' ? [1, 2, 3, 4, 5, 6] : [19, 20, 21, 22, 23, 24];
+      const trapped = state.bar[loser] > 0 || home.some((p) => state.points[p].color === loser);
+      kind = trapped ? 'backgammon' : 'gammon';
+      pts = trapped ? 3 : 2;
+    }
+    state.score[winner] += pts;
+    state.result = { winner, kind, pts };
+    state.phase = 'gameover';
+    state.dice = [];
+    clearSelection();
+    refresh();
+  }
+
+  function resetRound() {
+    state.phase = 'openRoll';
+    state.current = null;
+    state.dice = [];
+    state.opening = null;
+    state.openTie = false;
+    state.openingWin = false;
+    state.result = null;
+    clearSelection();
+  }
+
+  function newGame() {          // next round, same variant, score carries over
+    loadStart();
+    resetRound();
+    refresh();
+  }
+
+  // ---- Screens & menu ----
+  function showScreen() {
+    document.getElementById('menu').classList.toggle('active', state.screen === 'menu');
+    document.getElementById('game').classList.toggle('active', state.screen === 'game');
+  }
+
+  function renderMenu() {
+    const list = document.getElementById('menuList');
+    list.innerHTML = '';
+    for (const v of Object.values(VARIANTS)) {
+      const card = document.createElement('button');
+      card.className = 'menu-card';
+      card.type = 'button';
+      if (!v.ready) card.disabled = true;
+      card.innerHTML =
+        `<div class="mc-greek">${v.el}</div>` +
+        `<div class="mc-body">` +
+          `<div class="mc-name">${v.en}${v.ready ? '' : '<span class="soon">Soon</span>'}</div>` +
+          `<div class="mc-desc">${v.desc}</div>` +
+        `</div>` +
+        `<div class="mc-go">›</div>`;
+      if (v.ready) card.addEventListener('click', () => startGame(v.id));
+      list.appendChild(card);
+    }
+  }
+
+  function startGame(id) {
+    state.variant = id;
+    state.score = { w: 0, b: 0 };
+    loadStart();
+    resetRound();
+    state.screen = 'game';
+    refresh();
+  }
+
+  function toMenu() {
+    state.screen = 'menu';
+    showScreen();
+  }
+
+  function renderTopbar() {
+    const v = VARIANTS[state.variant];
+    document.getElementById('gameName').textContent = v ? `${v.el} · ${v.en}` : '';
+    document.getElementById('score').innerHTML =
+      `<span class="side"><span class="dot w"></span>${state.score.w}</span>` +
+      `<span class="side"><span class="dot b"></span>${state.score.b}</span>`;
+  }
+
+  // ---- Init ----
+  document.getElementById('toMenu').addEventListener('click', toMenu);
+  renderMenu();
+  showScreen();
+</script>
+</body>
+</html>
