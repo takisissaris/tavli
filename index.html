@@ -166,8 +166,9 @@
     cursor: pointer;
     padding: 4px 2px;
   }
-  .link:hover { color: var(--ink); }
+  .link:hover:not(:disabled) { color: var(--ink); }
   .link:focus-visible { outline: 2px solid #e6d2ab; outline-offset: 3px; border-radius: 4px; }
+  .link:disabled { opacity: 0.35; cursor: default; }
   .game-name {
     flex: 1;
     text-align: center;
@@ -533,6 +534,11 @@
   .banner .who { font-weight: 600; }
   .banner .who.w { color: #f2e6cd; }
   .banner .who.b { color: #d79a6b; }
+  .control-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
 
   .btn {
     font-family: inherit;
@@ -609,7 +615,10 @@
 
     <div class="controls">
       <p class="banner" id="banner">Roll for the first move.</p>
-      <button class="btn" id="action" type="button">Roll</button>
+      <div class="control-row">
+        <button class="link" id="undo" type="button" hidden>Undo</button>
+        <button class="btn" id="action" type="button">Roll</button>
+      </div>
     </div>
   </section>
 
@@ -644,6 +653,7 @@
     screen: 'menu',      // 'menu' | 'game'
     variant: null,       // active game id
     score: { w: 0, b: 0 }, // running match tally
+    history: [],         // snapshots to undo back through, cleared each turn
   };
 
   const PORTES_START = {
@@ -1166,6 +1176,7 @@
   }
 
   function performMove(origin, dest) {
+    pushHistory();
     const color = state.current;
 
     if (dest === 'off') {
@@ -1270,6 +1281,11 @@
     action.textContent = label;
     action.onclick = handler;
     action.disabled = disabled;
+
+    const undo = document.getElementById('undo');
+    undo.hidden = state.phase !== 'rolled';
+    undo.disabled = state.history.length === 0;
+    undo.onclick = undoMove;
   }
 
   function renderTrays() {
@@ -1335,6 +1351,26 @@
     state.justRolled = false;
   }
 
+  // ---- Undo ----
+  // A snapshot deliberately excludes `history` itself — otherwise each
+  // snapshot would embed every prior snapshot, doubling in size each move.
+  function snapshotState() {
+    const { history, ...rest } = state;
+    return JSON.parse(JSON.stringify(rest));
+  }
+  function pushHistory() {
+    state.history.push(snapshotState());
+    if (state.history.length > 20) state.history.shift();   // defensive cap; a turn is at most 4 moves
+  }
+  function undoMove() {
+    if (state.history.length === 0) return;
+    Object.assign(state, state.history.pop());
+    state.selected = null;
+    state.legal = [];
+    state.justRolled = false;
+    refresh();
+  }
+
   function refresh() {
     // Force re-entry: if the player has checkers on the bar, the bar is the only origin.
     if (state.phase === 'rolled' && state.current && state.bar[state.current] > 0) {
@@ -1366,6 +1402,7 @@
       state.dice = [w, b];
       state.openingWin = true;
       state.phase = 'rolled';
+      state.history = [];
       clearSelection();
     }
     refresh();
@@ -1377,6 +1414,7 @@
     state.justRolled = true;
     state.openingWin = false;
     state.phase = 'rolled';
+    state.history = [];
     clearSelection();
     refresh();
   }
@@ -1388,6 +1426,7 @@
     state.openTie = false;
     state.openingWin = false;
     state.phase = 'awaitRoll';
+    state.history = [];
     clearSelection();
     refresh();
   }
@@ -1420,6 +1459,7 @@
     state.openTie = false;
     state.openingWin = false;
     state.result = null;
+    state.history = [];
     clearSelection();
   }
 
