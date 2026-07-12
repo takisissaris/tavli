@@ -657,7 +657,7 @@
   const BOTTOM_LEFT  = [12, 11, 10, 9, 8, 7];
   const BOTTOM_RIGHT = [6, 5, 4, 3, 2, 1];
 
-  function buildQuad(pointNums, row, colOffset) {
+  function buildQuad(pointNums, row, colOffset, turnMax) {
     const quad = document.createElement('div');
     quad.className = 'quad';
     pointNums.forEach((num, i) => {
@@ -666,12 +666,12 @@
       let shade;
       if (row === 'top') shade = (col % 2 === 0) ? 'light' : 'dark';
       else               shade = (col % 2 === 0) ? 'dark'  : 'light';
-      quad.appendChild(buildPoint(num, row, shade));
+      quad.appendChild(buildPoint(num, row, shade, turnMax));
     });
     return quad;
   }
 
-  function buildPoint(num, row, shade) {
+  function buildPoint(num, row, shade, turnMax) {
     const el = document.createElement('div');
     el.className = `point ${row} ${shade}`;
     el.dataset.point = num;
@@ -683,7 +683,7 @@
     if (state.legal.includes(num)) el.classList.add('legal');
     if (movePhase && state.selected === null &&
         cell.color === state.current && cell.count > 0 &&
-        legalFrom(num).length) {
+        maximalDestinations(num, turnMax).length) {
       el.classList.add('movable');
     }
 
@@ -777,17 +777,23 @@
     const play = document.getElementById('play');
     play.innerHTML = '';
 
+    // Computed once per render (not once per point) — `movable` highlighting
+    // for all 24 points shares this same turn-wide maximal-dice-usage figure.
+    const turnMax = (state.phase === 'rolled' && state.selected === null && state.current)
+      ? maxDiceUsable(state, state.dice, state.current)
+      : undefined;
+
     const top = document.createElement('div');
     top.className = 'half top';
-    top.appendChild(buildQuad(TOP_LEFT, 'top', 0));
+    top.appendChild(buildQuad(TOP_LEFT, 'top', 0, turnMax));
     top.appendChild(buildBar('top'));
-    top.appendChild(buildQuad(TOP_RIGHT, 'top', 6));
+    top.appendChild(buildQuad(TOP_RIGHT, 'top', 6, turnMax));
 
     const bottom = document.createElement('div');
     bottom.className = 'half bottom';
-    bottom.appendChild(buildQuad(BOTTOM_LEFT, 'bottom', 0));
+    bottom.appendChild(buildQuad(BOTTOM_LEFT, 'bottom', 0, turnMax));
     bottom.appendChild(buildBar('bottom'));
-    bottom.appendChild(buildQuad(BOTTOM_RIGHT, 'bottom', 6));
+    bottom.appendChild(buildQuad(BOTTOM_RIGHT, 'bottom', 6, turnMax));
 
     play.appendChild(top);
     play.appendChild(bottom);
@@ -845,7 +851,21 @@
   }
 
   // ---- Move rules ----
-  const uniqueDice = () => [...new Set(state.dice)];
+  const uniq = (dice) => [...new Set(dice)];
+  function removeOne(dice, value) {
+    const copy = dice.slice();
+    const idx = copy.indexOf(value);
+    if (idx !== -1) copy.splice(idx, 1);
+    return copy;
+  }
+  function clonePos(pos) {
+    const points = {};
+    for (let p = 1; p <= 24; p++) {
+      const c = pos.points[p];
+      points[p] = { color: c.color, count: c.count, pinned: c.pinned };
+    }
+    return { points, bar: { ...pos.bar } };
+  }
 
   // White always runs 24 -> 1, home 1-6, in every variant. Black runs 1 -> 24,
   // home 19-24 in Portes/Plakoto (contact games); in Fevga black instead runs
@@ -861,17 +881,28 @@
     return state.variant === 'fevga' ? origin - 12 : 25 - origin;
   }
 
-  function isBlocked(dest, color) {
-    const c = state.points[dest];
+  // The functions below take an explicit `pos` ({points, bar}) so the
+  // maximal-dice-usage search further down can run them against disposable
+  // simulated positions; each has a thin live wrapper bound to `state`.
+  function isBlockedAt(pos, dest, color) {
+    const c = pos.points[dest];
     if (c.color !== other(color)) return false;
     // Fevga: no hitting, no pinning — a single checker blocks the point outright.
     if (state.variant === 'fevga') return c.count >= 1;
+    // Plakoto: a point that's already pinning someone is off-limits to further
+    // contact — the data model only tracks one trapped checker per point, and
+    // landing there to pin the (lone) covering checker would silently erase
+    // whoever is already trapped underneath it.
+    if (state.variant === 'plakoto' && c.pinned) return true;
     return c.count >= 2;   // a lone blot never blocks — Portes hits it, Plakoto pins it
   }
-  function landable(dest, color) {
+  function isBlocked(dest, color) { return isBlockedAt(state, dest, color); }
+
+  function landableAt(pos, dest, color) {
     if (dest < 1 || dest > 24) return false;   // bearing off arrives in step 5
-    return !isBlocked(dest, color);            // a lone opponent blot can be hit or pinned
+    return !isBlockedAt(pos, dest, color);     // a lone opponent blot can be hit or pinned
   }
+  function landable(dest, color) { return landableAt(state, dest, color); }
 
   function destFor(origin, die, color) {
     if (color === 'w') return origin - die;
@@ -880,47 +911,51 @@
   }
   const entryFor = (die, color) => color === 'w' ? 25 - die : die;
 
-  function canBearOff(color) {
-    if (state.bar[color] > 0) return false;
+  function canBearOffAt(pos, color) {
+    if (pos.bar[color] > 0) return false;
     const [lo, hi] = homeRange(color);
     // A checker pinned outside home is still stuck there — it hasn't come home either.
     for (let p = 1; p <= 24; p++) {
       if (p >= lo && p <= hi) continue;
-      const c = state.points[p];
+      const c = pos.points[p];
       if (c.color === color || c.pinned === color) return false;
     }
     return true;
   }
-  function farthestDist(color) {
+  function canBearOff(color) { return canBearOffAt(state, color); }
+
+  function farthestDistAt(pos, color) {
     const [lo, hi] = homeRange(color);
     let far = 0;
-    for (let p = lo; p <= hi; p++) if (state.points[p].color === color) far = Math.max(far, distToOff(p, color));
+    for (let p = lo; p <= hi; p++) if (pos.points[p].color === color) far = Math.max(far, distToOff(p, color));
     return far;
   }
+  function farthestDist(color) { return farthestDistAt(state, color); }
+
   // The die needed to bear a checker off this point, or null if not permitted.
   // Exact distance always works; a larger die works only from the farthest checker.
-  function bearOffDieFor(origin, color) {
-    if (typeof origin !== 'number' || !canBearOff(color)) return null;
-    const cell = state.points[origin];
+  function bearOffDieForAt(pos, dice, origin, color) {
+    if (typeof origin !== 'number' || !canBearOffAt(pos, color)) return null;
+    const cell = pos.points[origin];
     if (cell.color !== color || cell.count === 0) return null;
     const dist = distToOff(origin, color);
-    const far = farthestDist(color);
-    const cands = uniqueDice().filter((d) => d === dist || (d > dist && dist === far));
+    const far = farthestDistAt(pos, color);
+    const cands = uniq(dice).filter((d) => d === dist || (d > dist && dist === far));
     return cands.length ? Math.min(...cands) : null;
   }
+  function bearOffDieFor(origin, color) { return bearOffDieForAt(state, state.dice, origin, color); }
 
-  function legalFrom(origin) {
-    const color = state.current;
-    if (!color) return [];
+  function legalFromAt(pos, dice, color, origin) {
     const seen = new Set();
     const moves = [];
+    const dvals = uniq(dice);
 
     // On the bar: only re-entry is allowed, nothing else moves.
-    if (state.bar[color] > 0) {
+    if (pos.bar[color] > 0) {
       if (origin !== 'bar') return [];
-      for (const die of uniqueDice()) {
+      for (const die of dvals) {
         const dest = entryFor(die, color);
-        if (landable(dest, color) && !seen.has(dest)) {
+        if (landableAt(pos, dest, color) && !seen.has(dest)) {
           seen.add(dest);
           moves.push({ dest, die });
         }
@@ -929,63 +964,28 @@
     }
 
     if (origin === 'bar') return [];
-    const cell = state.points[origin];
+    const cell = pos.points[origin];
     if (cell.color !== color || cell.count === 0) return [];
-    for (const die of uniqueDice()) {
+    for (const die of dvals) {
       const dest = destFor(origin, die, color);
-      if (landable(dest, color) && !seen.has(dest)) {
+      if (landableAt(pos, dest, color) && !seen.has(dest)) {
         seen.add(dest);
         moves.push({ dest, die });
       }
     }
-    const offDie = bearOffDieFor(origin, color);
+    const offDie = bearOffDieForAt(pos, dice, origin, color);
     if (offDie !== null) moves.push({ dest: 'off', die: offDie });
     return moves;
   }
-
-  function hasAnyLegalMove(color) {
-    if (state.bar[color] > 0) return legalFrom('bar').length > 0;
-    for (let p = 1; p <= 24; p++) {
-      if (state.points[p].color === color && legalFrom(p).length) return true;
-    }
-    return false;
-  }
-
-  // ---- Selection & movement ----
-  function onPointTap(num) {
-    if (state.phase !== 'rolled') return;
-    const cell = state.points[num];
-    const mine = cell.color === state.current && cell.count > 0;
-
-    if (state.selected === null) {
-      if (mine && legalFrom(num).length) selectOrigin(num);
-      return;
-    }
-    if (state.legal.includes(num)) {
-      performMove(state.selected, num);
-    } else if (num === state.selected) {
-      clearSelection(); refresh();
-    } else if (mine && legalFrom(num).length) {
-      selectOrigin(num);
-    } else {
-      clearSelection(); refresh();
-    }
-  }
-
-  function selectOrigin(num) {
-    state.selected = num;
-    state.legal = legalFrom(num).map((m) => m.dest);
-    refresh();
-  }
-
-  function clearSelection() {
-    state.selected = null;
-    state.legal = [];
+  function legalFrom(origin) {
+    if (!state.current) return [];
+    return legalFromAt(state, state.dice, state.current, origin);
   }
 
   // A point's covering stack just emptied. If it was pinning a lone enemy
   // checker underneath, that checker is freed back into play; otherwise the
-  // point simply goes empty.
+  // point simply goes empty. (Declared here, ahead of applyMoveAt below,
+  // which — like performMove — relies on it.)
   function freeOrClear(cell) {
     if (cell.pinned) {
       cell.color = cell.pinned;
@@ -996,6 +996,134 @@
     }
   }
 
+  // Mutates `pos` to apply one move, mirroring performMove's board logic
+  // exactly (minus dice/off-tray/scoring bookkeeping, which callers handle).
+  function applyMoveAt(pos, origin, dest, color) {
+    if (dest === 'off') {
+      const from = pos.points[origin];
+      from.count -= 1;
+      if (from.count === 0) freeOrClear(from);
+      return;
+    }
+    if (origin === 'bar') {
+      pos.bar[color] -= 1;
+    } else {
+      const from = pos.points[origin];
+      from.count -= 1;
+      if (from.count === 0) freeOrClear(from);
+    }
+    const to = pos.points[dest];
+    if (to.color === other(color) && to.count === 1) {
+      if (state.variant === 'plakoto') {
+        to.pinned = to.color;
+      } else {
+        pos.bar[other(color)] += 1;
+      }
+      to.color = color;
+      to.count = 1;
+    } else if (to.count === 0) {
+      to.color = color;
+      to.count = 1;
+    } else {
+      to.count += 1;
+    }
+  }
+
+  function movableOrigins(pos, color) {
+    if (pos.bar[color] > 0) return ['bar'];
+    const origins = [];
+    for (let p = 1; p <= 24; p++) if (pos.points[p].color === color && pos.points[p].count > 0) origins.push(p);
+    return origins;
+  }
+
+  // ---- Maximal dice usage ----
+  // Tavli requires a player to use as many dice as any legal sequence
+  // allows, and — when only one die of a non-double roll can be played at
+  // all — the larger one if it's playable. Both need a lookahead: simulate
+  // candidate moves on a disposable copy of the board and see how many more
+  // dice a sequence can still use from there.
+  function maxDiceUsable(pos, dice, color) {
+    if (dice.length === 0) return 0;
+    let best = 0;
+    for (const origin of movableOrigins(pos, color)) {
+      for (const mv of legalFromAt(pos, dice, color, origin)) {
+        const clone = clonePos(pos);
+        applyMoveAt(clone, origin, mv.dest, color);
+        const sub = 1 + maxDiceUsable(clone, removeOne(dice, mv.die), color);
+        if (sub > best) best = sub;
+      }
+    }
+    return best;
+  }
+  function anyOriginCanPlayDie(pos, dice, color, die) {
+    return movableOrigins(pos, color).some((o) => legalFromAt(pos, dice, color, o).some((m) => m.die === die));
+  }
+  // Destinations from `origin` that keep this turn's dice usage at its
+  // achievable maximum — the subset of legalFrom(origin) actually allowed.
+  // `knownMax`, when supplied, skips recomputing the (shared) turn maximum.
+  function maximalDestinations(origin, knownMax) {
+    const color = state.current;
+    const dice = state.dice;
+    const candidates = legalFrom(origin);
+    if (candidates.length === 0) return [];
+
+    const overallMax = knownMax !== undefined ? knownMax : maxDiceUsable(state, dice, color);
+    if (overallMax === 0) return [];
+
+    // "Play the bigger die" tie-break: only relevant before either die of a
+    // plain (non-double) roll has been used, when just one die can be played.
+    let forcedDie = null;
+    if (overallMax === 1 && dice.length === 2 && dice[0] !== dice[1]) {
+      const big = Math.max(dice[0], dice[1]);
+      if (anyOriginCanPlayDie(state, dice, color, big)) forcedDie = big;
+    }
+
+    return candidates
+      .filter((mv) => {
+        if (forcedDie !== null && mv.die !== forcedDie) return false;
+        const clone = clonePos(state);
+        applyMoveAt(clone, origin, mv.dest, color);
+        return 1 + maxDiceUsable(clone, removeOne(dice, mv.die), color) === overallMax;
+      })
+      .map((mv) => mv.dest);
+  }
+
+  function hasAnyLegalMove(color) {
+    return maxDiceUsable(state, state.dice, color) > 0;
+  }
+
+  // ---- Selection & movement ----
+  function onPointTap(num) {
+    if (state.phase !== 'rolled') return;
+    const cell = state.points[num];
+    const mine = cell.color === state.current && cell.count > 0;
+
+    if (state.selected === null) {
+      if (mine && maximalDestinations(num).length) selectOrigin(num);
+      return;
+    }
+    if (state.legal.includes(num)) {
+      performMove(state.selected, num);
+    } else if (num === state.selected) {
+      clearSelection(); refresh();
+    } else if (mine && maximalDestinations(num).length) {
+      selectOrigin(num);
+    } else {
+      clearSelection(); refresh();
+    }
+  }
+
+  function selectOrigin(num) {
+    state.selected = num;
+    state.legal = maximalDestinations(num);
+    refresh();
+  }
+
+  function clearSelection() {
+    state.selected = null;
+    state.legal = [];
+  }
+
   function performMove(origin, dest) {
     const color = state.current;
 
@@ -1003,9 +1131,7 @@
       const die = bearOffDieFor(origin, color);
       const idx = state.dice.indexOf(die);
       if (idx !== -1) state.dice.splice(idx, 1);
-      const from = state.points[origin];
-      from.count -= 1;
-      if (from.count === 0) freeOrClear(from);
+      applyMoveAt(state, origin, dest, color);
       state.off[color] += 1;
       state.openingWin = false;
       state.justRolled = false;
@@ -1030,31 +1156,7 @@
     const idx = state.dice.indexOf(die);
     if (idx !== -1) state.dice.splice(idx, 1);
 
-    // leave the origin
-    if (origin === 'bar') {
-      state.bar[color] -= 1;
-    } else {
-      const from = state.points[origin];
-      from.count -= 1;
-      if (from.count === 0) freeOrClear(from);
-    }
-
-    // land — Portes hits a lone blot to the bar; Plakoto pins it in place instead
-    const to = state.points[dest];
-    if (to.color === other(color) && to.count === 1) {
-      if (state.variant === 'plakoto') {
-        to.pinned = to.color;
-      } else {
-        state.bar[other(color)] += 1;
-      }
-      to.color = color;
-      to.count = 1;
-    } else if (to.count === 0) {
-      to.color = color;
-      to.count = 1;
-    } else {
-      to.count += 1;
-    }
+    applyMoveAt(state, origin, dest, color);
 
     state.openingWin = false;
     state.justRolled = false;
@@ -1160,7 +1262,7 @@
     // Force re-entry: if the player has checkers on the bar, the bar is the only origin.
     if (state.phase === 'rolled' && state.current && state.bar[state.current] > 0) {
       state.selected = 'bar';
-      state.legal = legalFrom('bar').map((m) => m.dest);
+      state.legal = maximalDestinations('bar');
     }
     if (state.screen === 'game') {
       render();
