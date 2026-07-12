@@ -598,6 +598,16 @@
     <div class="menu-list" id="menuList"></div>
   </section>
 
+  <!-- Opponent picker -->
+  <section id="opponent" class="screen">
+    <div class="topbar">
+      <button class="link" id="opponentBack" type="button">‹ Back</button>
+      <div class="game-name" id="opponentTitle"></div>
+      <div class="score"></div>
+    </div>
+    <div class="menu-list" id="opponentList"></div>
+  </section>
+
   <!-- Game -->
   <section id="game" class="screen">
     <div class="topbar">
@@ -650,8 +660,10 @@
     legal: [],           // legal destination points for the selection
     justRolled: false,   // animate dice only on the roll itself
     result: null,        // { winner, kind, pts } once a game ends
-    screen: 'menu',      // 'menu' | 'game'
+    screen: 'menu',      // 'menu' | 'opponent' | 'game'
     variant: null,       // active game id
+    pendingVariant: null, // variant picked on the menu, awaiting an opponent choice
+    opponent: 'human',   // 'human' | an OPPONENTS bot id — the bot always plays black
     score: { w: 0, b: 0 }, // running match tally
     history: [],         // snapshots to undo back through, cleared each turn
   };
@@ -679,6 +691,16 @@
                desc: 'Same direction, no contact — a pure race.', ready: true },
   };
 
+  // Registry of opponents. 'human' is local pass-and-play; the bots always
+  // play Black. Kept as a registry (like VARIANTS) so more difficulty levels
+  // can be dropped in later without touching the picker screen or startGame.
+  const OPPONENTS = {
+    human:  { id: 'human',  el: 'Δύο παίκτες', en: 'Pass & Play',
+              desc: 'Two players share this device.', ready: true },
+    random: { id: 'random', el: 'Τυχαίο',       en: 'Random Bot',
+              desc: 'Plays any legal move at random — no strategy.', ready: true },
+  };
+
   function loadStart() {
     state.points = emptyPoints();
     const start = VARIANTS[state.variant].start;
@@ -701,6 +723,11 @@
   // labels and checker counts stay upright automatically.
   const opp = (n) => n <= 12 ? n + 12 : n - 12;
 
+  // Only pass-and-play hands the physical device to the other side of the
+  // table. Against a bot the human is always the one watching, so keep their
+  // orientation fixed rather than spinning the board while the bot "thinks".
+  const shouldRotate = () => state.current === 'b' && state.opponent === 'human';
+
   function buildQuad(pointNums, row, colOffset, turnMax) {
     const quad = document.createElement('div');
     quad.className = 'quad';
@@ -721,7 +748,7 @@
     el.dataset.point = num;
 
     const cell = state.points[num];
-    const movePhase = state.phase === 'rolled';
+    const movePhase = state.phase === 'rolled' && !isBotTurn();
 
     if (num === state.selected) el.classList.add('selected');
     if (state.legal.includes(num)) el.classList.add('legal');
@@ -762,7 +789,7 @@
     const top = row === 'top';
     const color = rotated ? (top ? 'w' : 'b') : (top ? 'b' : 'w');
     const n = state.bar[color];
-    const active = state.phase === 'rolled' && state.current === color && n > 0;
+    const active = state.phase === 'rolled' && !isBotTurn() && state.current === color && n > 0;
 
     if (active) {
       bar.classList.add('movable');
@@ -831,7 +858,7 @@
     // Pass-and-play: spin the whole board 180° on black's turn so whoever is
     // about to move sees their own home board nearest them, matching how a
     // physical board would look after being turned around the table.
-    const rotated = state.current === 'b';
+    const rotated = shouldRotate();
     const quadPts = (arr) => rotated ? arr.map(opp) : arr;
 
     const top = document.createElement('div');
@@ -896,7 +923,7 @@
       layer.appendChild(diceRow('w', [state.opening.w], animate));
       layer.appendChild(diceRow('b', [state.opening.b], animate));
     } else if (state.phase === 'rolled') {
-      layer.appendChild(diceRow(state.current, state.dice, animate, state.current === 'b'));
+      layer.appendChild(diceRow(state.current, state.dice, animate, shouldRotate()));
     }
     state.justRolled = false;
   }
@@ -1224,6 +1251,7 @@
   function renderControls() {
     const banner = document.getElementById('banner');
     const action = document.getElementById('action');
+    const botTurn = isBotTurn();
 
     let text = '';
     let label = '';
@@ -1277,13 +1305,25 @@
       }
     }
 
+    // The bot drives itself via the AI turn scheduler — nothing here is the
+    // human's to click, so replace the banner and hide the controls rather
+    // than leave a button sitting there disabled with no clear reason why.
+    if (botTurn) {
+      const opp = OPPONENTS[state.opponent];
+      const name = opp ? opp.en : 'Bot';
+      text = state.phase === 'awaitRoll'
+        ? `${who(state.current)} (${name}) is rolling…`
+        : `${who(state.current)} (${name}) is thinking…`;
+    }
+
     banner.innerHTML = text;
     action.textContent = label;
     action.onclick = handler;
     action.disabled = disabled;
+    action.hidden = botTurn;
 
     const undo = document.getElementById('undo');
-    undo.hidden = state.phase !== 'rolled';
+    undo.hidden = state.phase !== 'rolled' || botTurn;
     undo.disabled = state.history.length === 0;
     undo.onclick = undoMove;
   }
@@ -1295,7 +1335,7 @@
                    typeof state.selected === 'number' &&
                    state.legal.includes('off');
 
-    const order = state.current === 'b' ? [['w', 'top'], ['b', 'bottom']] : [['b', 'top'], ['w', 'bottom']];
+    const order = shouldRotate() ? [['w', 'top'], ['b', 'bottom']] : [['b', 'top'], ['w', 'bottom']];
     order.forEach(([color, pos]) => {
       const tray = document.createElement('div');
       tray.className = `tray ${color}`;
@@ -1386,6 +1426,56 @@
     }
     showScreen();
     saveGame();
+    scheduleAiTurn();
+  }
+
+  // ---- AI opponents ----
+  // Bots always play black. isBotTurn() is the single source of truth for
+  // whether the board should be human-interactive right now; it's re-checked
+  // fresh at every step rather than captured in a closure, so an undo, a
+  // reload mid-turn, or leaving the screen can't leave a stale timer running
+  // against a position it no longer applies to.
+  const AI_DELAY_MS = 650;
+  let aiTimer = null;
+
+  function isBotTurn() {
+    return state.screen === 'game' && state.opponent !== 'human' && state.current === 'b' &&
+      (state.phase === 'awaitRoll' || state.phase === 'rolled');
+  }
+
+  function scheduleAiTurn() {
+    if (aiTimer !== null || !isBotTurn()) return;
+    aiTimer = setTimeout(() => {
+      aiTimer = null;
+      aiStep();
+    }, AI_DELAY_MS);
+  }
+
+  // Chooses a move for the current bot. 'random' is the only strategy today;
+  // OPPONENTS has room for more difficulty levels to plug in here later.
+  function chooseAiMove() {
+    const color = state.current;
+    const knownMax = maxDiceUsable(state, state.dice, color);
+    const origins = movableOrigins(state, color);
+    const options = [];
+    for (const o of origins) for (const d of maximalDestinations(o, knownMax)) options.push([o, d]);
+    if (options.length === 0) return null;
+    return options[Math.floor(Math.random() * options.length)];
+  }
+
+  function aiStep() {
+    if (!isBotTurn()) return;
+    if (state.phase === 'awaitRoll') {
+      turnRoll();
+      return;
+    }
+    if (state.dice.length === 0 || !hasAnyLegalMove(state.current)) {
+      passDevice();
+      return;
+    }
+    const move = chooseAiMove();
+    if (!move) { passDevice(); return; }   // shouldn't happen given the hasAnyLegalMove check above
+    performMove(move[0], move[1]);
   }
 
   // ---- Actions ----
@@ -1472,31 +1562,52 @@
   // ---- Screens & menu ----
   function showScreen() {
     document.getElementById('menu').classList.toggle('active', state.screen === 'menu');
+    document.getElementById('opponent').classList.toggle('active', state.screen === 'opponent');
     document.getElementById('game').classList.toggle('active', state.screen === 'game');
   }
 
-  function renderMenu() {
-    const list = document.getElementById('menuList');
-    list.innerHTML = '';
-    for (const v of Object.values(VARIANTS)) {
+  // Builds a .menu-card list from any registry shaped like VARIANTS/OPPONENTS.
+  function renderPicker(listEl, registry, onPick) {
+    listEl.innerHTML = '';
+    for (const item of Object.values(registry)) {
       const card = document.createElement('button');
       card.className = 'menu-card';
       card.type = 'button';
-      if (!v.ready) card.disabled = true;
+      if (!item.ready) card.disabled = true;
       card.innerHTML =
-        `<div class="mc-greek">${v.el}</div>` +
+        `<div class="mc-greek">${item.el}</div>` +
         `<div class="mc-body">` +
-          `<div class="mc-name">${v.en}${v.ready ? '' : '<span class="soon">Soon</span>'}</div>` +
-          `<div class="mc-desc">${v.desc}</div>` +
+          `<div class="mc-name">${item.en}${item.ready ? '' : '<span class="soon">Soon</span>'}</div>` +
+          `<div class="mc-desc">${item.desc}</div>` +
         `</div>` +
         `<div class="mc-go">›</div>`;
-      if (v.ready) card.addEventListener('click', () => startGame(v.id));
-      list.appendChild(card);
+      if (item.ready) card.addEventListener('click', () => onPick(item.id));
+      listEl.appendChild(card);
     }
   }
 
-  function startGame(id) {
+  function renderMenu() {
+    renderPicker(document.getElementById('menuList'), VARIANTS, pickVariant);
+  }
+
+  function renderOpponentMenu() {
+    const v = VARIANTS[state.pendingVariant];
+    document.getElementById('opponentTitle').textContent = v ? `${v.el} · ${v.en}` : '';
+    renderPicker(document.getElementById('opponentList'), OPPONENTS, (opponentId) => {
+      startGame(state.pendingVariant, opponentId);
+    });
+  }
+
+  function pickVariant(id) {
+    state.pendingVariant = id;
+    state.screen = 'opponent';
+    renderOpponentMenu();
+    refresh();
+  }
+
+  function startGame(id, opponent) {
     state.variant = id;
+    state.opponent = opponent;
     state.score = { w: 0, b: 0 };
     loadStart();
     resetRound();
@@ -1534,8 +1645,10 @@
 
   // ---- Init ----
   document.getElementById('toMenu').addEventListener('click', toMenu);
+  document.getElementById('opponentBack').addEventListener('click', toMenu);
   renderMenu();
   loadGame();
+  if (state.screen === 'opponent') renderOpponentMenu();
   refresh();
   initBuildTag();
 </script>
