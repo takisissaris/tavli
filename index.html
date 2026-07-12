@@ -1305,6 +1305,36 @@
     });
   }
 
+  // ---- Persistence ----
+  // Bumping this key (rather than migrating old saves) is enough protection
+  // against a future incompatible state shape; missing fields on an older
+  // save degrade harmlessly since every read of them already treats
+  // undefined the same as null/absent.
+  const STORAGE_KEY = 'tavli-save-v1';
+
+  function saveGame() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (e) {
+      // Private browsing, storage disabled, quota exceeded, etc. — the game
+      // still works, it just won't survive a refresh.
+    }
+  }
+
+  function loadGame() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      Object.assign(state, JSON.parse(raw));
+    } catch (e) {
+      return;
+    }
+    // Never resume mid-selection or with a stale "just rolled" animation flag.
+    state.selected = null;
+    state.legal = [];
+    state.justRolled = false;
+  }
+
   function refresh() {
     // Force re-entry: if the player has checkers on the bar, the bar is the only origin.
     if (state.phase === 'rolled' && state.current && state.bar[state.current] > 0) {
@@ -1319,6 +1349,7 @@
       renderTopbar();
     }
     showScreen();
+    saveGame();
   }
 
   // ---- Actions ----
@@ -1435,7 +1466,7 @@
 
   function toMenu() {
     state.screen = 'menu';
-    showScreen();
+    refresh();
   }
 
   function renderTopbar() {
@@ -1464,7 +1495,8 @@
   // ---- Init ----
   document.getElementById('toMenu').addEventListener('click', toMenu);
   renderMenu();
-  showScreen();
+  loadGame();
+  refresh();
   initBuildTag();
 </script>
 </body>
