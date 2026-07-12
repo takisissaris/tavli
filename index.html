@@ -699,6 +699,8 @@
               desc: 'Two players share this device.', ready: true },
     random: { id: 'random', el: 'Τυχαίο',       en: 'Random Bot',
               desc: 'Plays any legal move at random — no strategy.', ready: true },
+    hitter: { id: 'hitter', el: 'Επιθετικό',    en: 'Hitter Bot',
+              desc: 'Random, but grabs a hit or pin whenever one is on offer.', ready: true },
   };
 
   function loadStart() {
@@ -1451,8 +1453,21 @@
     }, AI_DELAY_MS);
   }
 
-  // Chooses a move for the current bot. 'random' is the only strategy today;
-  // OPPONENTS has room for more difficulty levels to plug in here later.
+  // True if landing on `dest` right now would hit (Portes) or pin (Plakoto) a
+  // lone enemy checker — i.e. it's already a legal destination and the point
+  // currently holds exactly one opposing checker. Always false in Fevga,
+  // where a single checker blocks outright and such a destination could
+  // never be legal to begin with.
+  function isHitMove(dest, color) {
+    if (dest === 'off') return false;
+    const c = state.points[dest];
+    return c.color === other(color) && c.count === 1;
+  }
+
+  // Chooses a move for the current bot. Both strategies pick uniformly at
+  // random among this turn's legal, dice-maximal options; 'hitter' first
+  // narrows that pool to hitting/pinning moves when at least one is on offer.
+  // OPPONENTS has room for smarter strategies to plug in here later.
   function chooseAiMove() {
     const color = state.current;
     const knownMax = maxDiceUsable(state, state.dice, color);
@@ -1460,7 +1475,13 @@
     const options = [];
     for (const o of origins) for (const d of maximalDestinations(o, knownMax)) options.push([o, d]);
     if (options.length === 0) return null;
-    return options[Math.floor(Math.random() * options.length)];
+
+    let pool = options;
+    if (state.opponent === 'hitter') {
+      const hits = options.filter(([, d]) => isHitMove(d, color));
+      if (hits.length > 0) pool = hits;
+    }
+    return pool[Math.floor(Math.random() * pool.length)];
   }
 
   function aiStep() {
