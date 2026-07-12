@@ -985,6 +985,30 @@
   }
   function bearOffDieFor(origin, color) { return bearOffDieForAt(state, state.dice, origin, color); }
 
+  // Fevga: a player may never close every point of their own home board
+  // while the opponent still has a checker that hasn't yet crossed it — a
+  // single checker is enough to close a point there, so a full six-point
+  // wall would trap that checker permanently with no way to ever pass.
+  // Checked per candidate move rather than at the end of a full turn:
+  // once a checker enters home it can only advance deeper or bear off,
+  // never leave again, so a closure created partway through a turn can
+  // only stay closed or open further from there — never re-close later.
+  function closesOutOpponent(pos, origin, dest, color) {
+    if (state.variant !== 'fevga' || dest === 'off') return false;
+    const clone = clonePos(pos);
+    applyMoveAt(clone, origin, dest, color);
+    const [lo, hi] = homeRange(color);
+    for (let p = lo; p <= hi; p++) {
+      if (clone.points[p].color !== color || clone.points[p].count === 0) return false;
+    }
+    const opp = other(color);
+    for (let i = 1; i <= 6; i++) {
+      const p = hi + i > 24 ? hi + i - 24 : hi + i;
+      if (clone.points[p].color === opp) return true;
+    }
+    return false;
+  }
+
   function legalFromAt(pos, dice, color, origin) {
     const seen = new Set();
     const moves = [];
@@ -1008,7 +1032,7 @@
     if (cell.color !== color || cell.count === 0) return [];
     for (const die of dvals) {
       const dest = destFor(origin, die, color);
-      if (landableAt(pos, dest, color) && !seen.has(dest)) {
+      if (landableAt(pos, dest, color) && !seen.has(dest) && !closesOutOpponent(pos, origin, dest, color)) {
         seen.add(dest);
         moves.push({ dest, die });
       }
