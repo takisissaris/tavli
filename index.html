@@ -447,6 +447,23 @@
     max-width: 40ch;
   }
 
+  /* ---------- Build tag ---------- */
+  .build-tag {
+    position: fixed;
+    right: 10px;
+    bottom: 8px;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+    color: var(--ink-dim);
+    opacity: 0.4;
+    text-decoration: none;
+    z-index: 100;
+    transition: opacity 120ms ease;
+  }
+  .build-tag:hover, .build-tag:focus-visible { opacity: 0.9; }
+
   /* ---------- Dice ---------- */
   .dice-layer {
     position: absolute;
@@ -590,6 +607,11 @@
       <button class="btn" id="action" type="button">Roll</button>
     </div>
   </section>
+
+  <!-- Stamped with the deployed commit's short SHA by the Pages workflow
+       (see .github/workflows/pages.yml) so it's obvious which build is
+       live. Left as the placeholder when opened straight from a checkout. -->
+  <a class="build-tag" id="buildTag" href="#" target="_blank" rel="noopener">__BUILD_SHA__</a>
 
 <script>
   // ---- Board state (absolute points 1..24) ----
@@ -1414,10 +1436,26 @@
       `<span class="side"><span class="dot b"></span>${state.score.b}</span>`;
   }
 
+  function initBuildTag() {
+    const el = document.getElementById('buildTag');
+    const sha = el.textContent.trim();
+    // A real short SHA is 7 lowercase hex chars; the unstamped placeholder
+    // (checked out straight from git, not built by the Pages workflow)
+    // isn't, so this stays decoupled from the placeholder's exact spelling —
+    // a sed replacement of that spelling can't accidentally match here too.
+    if (/^[0-9a-f]{7,}$/.test(sha)) {
+      el.href = `https://github.com/takisissaris/tavli/commit/${sha}`;
+    } else {
+      el.textContent = 'dev';
+      el.removeAttribute('href');
+    }
+  }
+
   // ---- Init ----
   document.getElementById('toMenu').addEventListener('click', toMenu);
   renderMenu();
   showScreen();
+  initBuildTag();
 </script>
 </body>
 </html>

@@ -25,6 +25,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Stamp build version
+        run: sed -i "s/__BUILD_SHA__/${GITHUB_SHA::7}/g" index.html
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Upload artifact
