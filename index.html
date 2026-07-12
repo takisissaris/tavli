@@ -701,6 +701,8 @@
               desc: 'Plays any legal move at random — no strategy.', ready: true },
     hitter: { id: 'hitter', el: 'Επιθετικό',    en: 'Hitter Bot',
               desc: 'Random, but grabs a hit or pin whenever one is on offer.', ready: true },
+    safe:   { id: 'safe',   el: 'Προσεκτικό',    en: 'Safe Bot',
+              desc: 'Random, but avoids leaving a checker alone on a point.', ready: true },
   };
 
   function loadStart() {
@@ -1464,10 +1466,37 @@
     return c.color === other(color) && c.count === 1;
   }
 
-  // Chooses a move for the current bot. Both strategies pick uniformly at
-  // random among this turn's legal, dice-maximal options; 'hitter' first
-  // narrows that pool to hitting/pinning moves when at least one is on offer.
-  // OPPONENTS has room for smarter strategies to plug in here later.
+  // How many of color's own points would be left holding exactly one checker
+  // (a blot, exposed to a hit or pin) in this position. A checker just borne
+  // off isn't counted — applyMoveAt already dropped it from `points`.
+  function countBlots(pos, color) {
+    let n = 0;
+    for (let p = 1; p <= 24; p++) if (pos.points[p].color === color && pos.points[p].count === 1) n++;
+    return n;
+  }
+
+  // Narrows `options` down to whichever simulated-result score is best,
+  // breaking ties by keeping every option tied for best (caller still
+  // chooses randomly among those).
+  function bestByScore(options, color, scoreOf) {
+    let best = Infinity;
+    let picked = [];
+    for (const [o, d] of options) {
+      const clone = clonePos(state);
+      applyMoveAt(clone, o, d, color);
+      const score = scoreOf(clone, color);
+      if (score < best) { best = score; picked = [[o, d]]; }
+      else if (score === best) { picked.push([o, d]); }
+    }
+    return picked;
+  }
+
+  // Chooses a move for the current bot. All strategies pick uniformly at
+  // random among this turn's legal, dice-maximal options, first narrowing
+  // that pool per-strategy: 'hitter' to hitting/pinning moves when any is on
+  // offer, 'safe' to whichever moves leave the fewest of its own blots
+  // exposed afterward. OPPONENTS has room for smarter strategies to plug in
+  // here later.
   function chooseAiMove() {
     const color = state.current;
     const knownMax = maxDiceUsable(state, state.dice, color);
@@ -1480,6 +1509,8 @@
     if (state.opponent === 'hitter') {
       const hits = options.filter(([, d]) => isHitMove(d, color));
       if (hits.length > 0) pool = hits;
+    } else if (state.opponent === 'safe') {
+      pool = bestByScore(options, color, countBlots);
     }
     return pool[Math.floor(Math.random() * pool.length)];
   }
