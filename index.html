@@ -335,15 +335,19 @@
 
   /* Plakoto: a lone checker trapped under the covering stack — a hollow
      ring in the trapped checker's own colour, sized to peek out from
-     behind the stack sitting on top of it. */
+     behind the stack sitting on top of it. Sized to stay clear of a second
+     covering checker: stacking spaces checker centres 88cqw apart (up to
+     4 on the point), so the second checker's near edge sits 46cqw out from
+     the first — this ring's total reach (radius + shadow) must stay under
+     that or it visibly wraps around the second checker too. */
   .checker.pinned {
     z-index: 0;
-    width: 110cqw;
+    width: 86cqw;
     background: transparent;
-    border: 2.6cqw solid;
-    box-shadow:
-      0 0 0 2cqw rgba(20,12,6,0.6),
-      0 0 0 3.8cqw rgba(245,195,80,0.7);
+    /* border-box sizing means a thicker border adds visible ink without
+       pushing the outer edge (and so the overlap risk) out any further. */
+    border: 5.2cqw solid;
+    box-shadow: 0 0 0 1.5cqw rgba(245, 195, 80, 0.8);
   }
   .checker.pinned.w { border-color: var(--ivory-hi); }
   .checker.pinned.b { border-color: var(--horn-hi); }
