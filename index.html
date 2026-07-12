@@ -26,6 +26,10 @@
   }
 
   * { box-sizing: border-box; }
+  /* The [hidden] attribute only wins the cascade by origin, not specificity
+     — any class rule that sets `display` (e.g. flex/flow containers below)
+     silently overrides it otherwise. Force it explicit and unconditional. */
+  [hidden] { display: none !important; }
 
   html, body {
     margin: 0;
@@ -145,6 +149,70 @@
   }
   .mc-go { font-size: 22px; color: var(--ink-dim); }
   .menu-card[disabled] .mc-go { display: none; }
+
+  .saves-block, .new-game-block {
+    width: 100%;
+    max-width: 520px;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(10px, 1.6vh, 14px);
+  }
+  .section-label {
+    font-size: clamp(11px, 1.6vw, 13px);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    margin: 2px 2px 0;
+  }
+  .save-card { cursor: pointer; }
+  .save-del {
+    background: none;
+    border: none;
+    color: var(--ink-dim);
+    font-size: 22px;
+    line-height: 1;
+    padding: 6px 8px;
+    margin: -6px -4px;
+    border-radius: 8px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .save-del:hover { color: #e6a1a1; background: rgba(230,161,161,0.12); }
+  .save-del:focus-visible { outline: 2px solid #e6d2ab; outline-offset: 2px; }
+
+  /* ---------- Name entry ---------- */
+  .name-form {
+    width: 100%;
+    max-width: 420px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    padding: clamp(16px, 3vw, 22px);
+    border-radius: 14px;
+    border: 1px solid rgba(230,210,171,0.14);
+    background: linear-gradient(150deg, #2c1d12, #211510);
+  }
+  .name-field { display: flex; flex-direction: column; gap: 8px; }
+  .name-field label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: clamp(13px, 2vw, 15px);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+  .name-field input {
+    font-family: inherit;
+    font-size: clamp(15px, 2.2vw, 17px);
+    color: var(--ink);
+    background: rgba(0,0,0,0.25);
+    border: 1px solid rgba(230,210,171,0.2);
+    border-radius: 10px;
+    padding: 0.6em 0.8em;
+  }
+  .name-field input:focus-visible { outline: 2px solid #e6d2ab; outline-offset: 2px; }
+  .name-form .btn { align-self: center; margin-top: 4px; }
 
   /* ---------- Game top bar & score ---------- */
   .topbar {
@@ -574,7 +642,14 @@
       <h1 class="title">Τάβλι</h1>
       <div class="romanization">Tavli — three games, one board</div>
     </header>
-    <div class="menu-list" id="menuList"></div>
+    <div class="saves-block" id="savesBlock" hidden>
+      <div class="section-label">Continue</div>
+      <div class="menu-list" id="continueList"></div>
+    </div>
+    <div class="new-game-block">
+      <div class="section-label" id="newGameLabel" hidden>New Game</div>
+      <div class="menu-list" id="menuList"></div>
+    </div>
   </section>
 
   <!-- Opponent picker -->
@@ -585,6 +660,26 @@
       <div class="score"></div>
     </div>
     <div class="menu-list" id="opponentList"></div>
+  </section>
+
+  <!-- Player names -->
+  <section id="names" class="screen">
+    <div class="topbar">
+      <button class="link" id="namesBack" type="button">‹ Back</button>
+      <div class="game-name" id="namesTitle"></div>
+      <div class="score"></div>
+    </div>
+    <form class="name-form" id="nameForm">
+      <div class="name-field">
+        <label for="nameW"><span class="dot w"></span><span id="nameWLabel">White</span></label>
+        <input type="text" id="nameW" maxlength="18" autocomplete="off" placeholder="White">
+      </div>
+      <div class="name-field" id="nameBField">
+        <label for="nameB"><span class="dot b"></span>Black</label>
+        <input type="text" id="nameB" maxlength="18" autocomplete="off" placeholder="Black">
+      </div>
+      <button class="btn" type="submit">Start Game</button>
+    </form>
   </section>
 
   <!-- Game -->
@@ -641,10 +736,13 @@
     justRolled: false,   // animate dice only on the roll itself
     justPinned: null,    // point number to flash once, right after a Plakoto pin
     result: null,        // { winner, kind, pts } once a game ends
-    screen: 'menu',      // 'menu' | 'opponent' | 'game'
+    screen: 'menu',      // 'menu' | 'opponent' | 'names' | 'game'
     variant: null,       // active game id
     pendingVariant: null, // variant picked on the menu, awaiting an opponent choice
+    pendingOpponent: null, // opponent picked next, awaiting names before startGame
     opponent: 'human',   // 'human' | an OPPONENTS bot id — the bot always plays black
+    names: { w: 'White', b: 'Black' }, // display names for the active game
+    saveId: null,         // this game's slot id in the saved-games list, once started
     score: { w: 0, b: 0 }, // running match tally
     history: [],         // snapshots to undo back through, cleared each turn
   };
@@ -804,7 +902,7 @@
     const { color, count, pinned } = cell;
     const items = pinned ? [pinned, ...Array(count).fill(color)] : Array(count).fill(color);
     if (items.length === 0) return;
-    if (pinned) pointEl.title = `${NAME[pinned]} checker pinned here`;
+    if (pinned) pointEl.title = `${state.names[pinned]} checker pinned here`;
 
     // usable length along the point, expressed in cqw (relative to point width)
     const USABLE = 430;   // ~ point height in cqw
@@ -881,7 +979,15 @@
   };
   const rollDie = () => 1 + Math.floor(Math.random() * 6);
   const other = (c) => (c === 'w' ? 'b' : 'w');
-  const NAME = { w: 'White', b: 'Black' };
+
+  // Names are free text (player-entered), so anywhere they land inside
+  // innerHTML must escape them — DOM property assignments like .title or
+  // .textContent don't need this, only innerHTML does.
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[c]));
+  }
 
   function makeDie(value, color, animate) {
     const die = document.createElement('div');
@@ -1264,7 +1370,7 @@
 
   // ---- Controls / banner ----
   function who(color) {
-    return `<span class="who ${color}">${NAME[color]}</span>`;
+    return `<span class="who ${color}">${escapeHtml(state.names[color])}</span>`;
   }
 
   function renderControls() {
@@ -1328,11 +1434,9 @@
     // human's to click, so replace the banner and hide the controls rather
     // than leave a button sitting there disabled with no clear reason why.
     if (botTurn) {
-      const opp = OPPONENTS[state.opponent];
-      const name = opp ? opp.en : 'Bot';
       text = state.phase === 'awaitRoll'
-        ? `${who(state.current)} (${name}) is rolling…`
-        : `${who(state.current)} (${name}) is thinking…`;
+        ? `${who(state.current)} is rolling…`
+        : `${who(state.current)} is thinking…`;
     }
 
     banner.innerHTML = text;
@@ -1402,6 +1506,93 @@
     state.legal = [];
     state.justRolled = false;
     state.justPinned = null;
+    // A save from before named players/saved-game slots existed won't have
+    // these — backfill them so an old in-progress game still gets a slot in
+    // the Continue list instead of just silently sitting outside it.
+    if (!state.names) state.names = { w: 'White', b: 'Black' };
+    if (state.screen === 'game' && !state.saveId) state.saveId = newSaveId();
+  }
+
+  // ---- Saved games (Continue list) ----
+  // A second, independent persistence layer alongside the single-slot
+  // STORAGE_KEY above: STORAGE_KEY always mirrors "whatever's on screen
+  // right now" for a plain page refresh, while this keeps one durable,
+  // named, timestamped entry per game so several in-progress games (or
+  // finished ones) can be listed and resumed independently. Both stay in
+  // sync automatically since every game screen refresh() writes both.
+  const SAVES_KEY = 'tavli-saves-v1';
+  const SAVES_LIMIT = 20;
+  const LAST_NAMES_KEY = 'tavli-lastnames-v1';
+
+  const newSaveId = () => `save-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  function loadSaves() {
+    try {
+      const raw = localStorage.getItem(SAVES_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function writeSaves(list) {
+    try {
+      list.sort((a, b) => b.savedAt - a.savedAt);
+      if (list.length > SAVES_LIMIT) list.length = SAVES_LIMIT;
+      localStorage.setItem(SAVES_KEY, JSON.stringify(list));
+    } catch (e) {
+      // storage disabled/full — the live game still plays fine, it just
+      // won't show up (or stay up to date) in the Continue list.
+    }
+  }
+
+  // Upserts the live game into its own slot on every game-screen refresh, so
+  // leaving mid-game — closing the tab, or tapping "‹ Menu" — never loses
+  // it. That's what makes "‹ Menu" double as a safe "quit": there's nothing
+  // extra to confirm, the game is already sitting in the Continue list.
+  function upsertSave() {
+    if (!state.saveId) return;
+    const list = loadSaves();
+    const entry = {
+      id: state.saveId,
+      savedAt: Date.now(),
+      variant: state.variant,
+      opponent: state.opponent,
+      names: { ...state.names },
+      snapshot: snapshotState(),
+    };
+    const i = list.findIndex((s) => s.id === state.saveId);
+    if (i >= 0) list[i] = entry; else list.push(entry);
+    writeSaves(list);
+  }
+
+  function deleteSave(id) {
+    writeSaves(loadSaves().filter((s) => s.id !== id));
+    renderContinueList();
+  }
+
+  function resumeSave(id) {
+    const entry = loadSaves().find((s) => s.id === id);
+    if (!entry) return;
+    Object.assign(state, entry.snapshot);
+    state.selected = null;
+    state.legal = [];
+    state.justRolled = false;
+    state.justPinned = null;
+    state.history = [];
+    state.screen = 'game';
+    refresh();
+  }
+
+  function formatSavedAt(ts) {
+    const d = new Date(ts);
+    const now = new Date();
+    const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    if (d.toDateString() === now.toDateString()) return `Today, ${time}`;
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    if (d.toDateString() === yesterday.toDateString()) return `Yesterday, ${time}`;
+    return `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${time}`;
   }
 
   // ---- Undo ----
@@ -1437,6 +1628,9 @@
       renderOffStrip();
       renderControls();
       renderTopbar();
+      upsertSave();
+    } else if (state.screen === 'menu') {
+      renderMenu();
     }
     showScreen();
     saveGame();
@@ -1625,6 +1819,7 @@
   function showScreen() {
     document.getElementById('menu').classList.toggle('active', state.screen === 'menu');
     document.getElementById('opponent').classList.toggle('active', state.screen === 'opponent');
+    document.getElementById('names').classList.toggle('active', state.screen === 'names');
     document.getElementById('game').classList.toggle('active', state.screen === 'game');
   }
 
@@ -1650,14 +1845,73 @@
 
   function renderMenu() {
     renderPicker(document.getElementById('menuList'), VARIANTS, pickVariant);
+    renderContinueList();
+  }
+
+  // Builds the "Continue" list of saved games above the New Game picker,
+  // hiding both it and its section labels when there's nothing saved yet.
+  function renderContinueList() {
+    const saves = loadSaves().sort((a, b) => b.savedAt - a.savedAt);
+    document.getElementById('savesBlock').hidden = saves.length === 0;
+    document.getElementById('newGameLabel').hidden = saves.length === 0;
+
+    const listEl = document.getElementById('continueList');
+    listEl.innerHTML = '';
+    saves.forEach((entry) => {
+      const v = VARIANTS[entry.variant];
+      const oppInfo = OPPONENTS[entry.opponent];
+      const vsText = entry.opponent === 'human'
+        ? `${entry.names.w} vs ${entry.names.b}`
+        : `${entry.names.w} vs ${oppInfo ? oppInfo.en : 'Bot'}`;
+
+      const card = document.createElement('div');
+      card.className = 'menu-card save-card';
+      card.tabIndex = 0;
+      card.setAttribute('role', 'button');
+      card.innerHTML =
+        `<div class="mc-greek">${v ? v.el : '?'}</div>` +
+        `<div class="mc-body">` +
+          `<div class="mc-name">${v ? v.en : ''}</div>` +
+          `<div class="mc-desc">${escapeHtml(vsText)} · ${formatSavedAt(entry.savedAt)}</div>` +
+        `</div>` +
+        `<button class="save-del" type="button" title="Delete this saved game">×</button>`;
+      card.addEventListener('click', () => resumeSave(entry.id));
+      card.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); resumeSave(entry.id); }
+      });
+      card.querySelector('.save-del').addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (confirm('Delete this saved game?')) deleteSave(entry.id);
+      });
+      listEl.appendChild(card);
+    });
   }
 
   function renderOpponentMenu() {
     const v = VARIANTS[state.pendingVariant];
     document.getElementById('opponentTitle').textContent = v ? `${v.el} · ${v.en}` : '';
     renderPicker(document.getElementById('opponentList'), OPPONENTS, (opponentId) => {
-      startGame(state.pendingVariant, opponentId);
+      state.pendingOpponent = opponentId;
+      state.screen = 'names';
+      renderNamesScreen();
+      refresh();
     });
+  }
+
+  // Pre-fills from the last names used (kept separately from any save, as a
+  // convenience), and hides the second field for a bot opponent — the bot's
+  // own display name (e.g. "Random Bot") stands in for Black, not editable.
+  function renderNamesScreen() {
+    const v = VARIANTS[state.pendingVariant];
+    const isHuman = state.pendingOpponent === 'human';
+    document.getElementById('namesTitle').textContent = v ? `${v.el} · ${v.en}` : '';
+    document.getElementById('nameBField').hidden = !isHuman;
+    document.getElementById('nameWLabel').textContent = isHuman ? 'White' : 'Your name';
+
+    let last = {};
+    try { last = JSON.parse(localStorage.getItem(LAST_NAMES_KEY)) || {}; } catch (e) {}
+    document.getElementById('nameW').value = last.w || '';
+    document.getElementById('nameB').value = isHuman ? (last.b || '') : '';
   }
 
   function pickVariant(id) {
@@ -1667,9 +1921,11 @@
     refresh();
   }
 
-  function startGame(id, opponent) {
+  function startGame(id, opponent, names) {
     state.variant = id;
     state.opponent = opponent;
+    state.names = names || { w: 'White', b: 'Black' };
+    state.saveId = newSaveId();
     state.score = { w: 0, b: 0 };
     loadStart();
     resetRound();
@@ -1708,9 +1964,27 @@
   // ---- Init ----
   document.getElementById('toMenu').addEventListener('click', toMenu);
   document.getElementById('opponentBack').addEventListener('click', toMenu);
+  document.getElementById('namesBack').addEventListener('click', () => {
+    state.screen = 'opponent';
+    refresh();
+  });
+  document.getElementById('nameForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const isHuman = state.pendingOpponent === 'human';
+    const oppInfo = OPPONENTS[state.pendingOpponent];
+    const w = document.getElementById('nameW').value.trim() || 'White';
+    const b = isHuman
+      ? (document.getElementById('nameB').value.trim() || 'Black')
+      : (oppInfo ? oppInfo.en : 'Black');
+    try {
+      localStorage.setItem(LAST_NAMES_KEY, JSON.stringify({ w, b: isHuman ? b : '' }));
+    } catch (err) {}
+    startGame(state.pendingVariant, state.pendingOpponent, { w, b });
+  });
   renderMenu();
   loadGame();
   if (state.screen === 'opponent') renderOpponentMenu();
+  if (state.screen === 'names') renderNamesScreen();
   refresh();
   initBuildTag();
 </script>
