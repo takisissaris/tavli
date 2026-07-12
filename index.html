@@ -548,12 +548,17 @@
     box-shadow: 0 2px 0 #a4854f, 0 6px 15px rgba(0,0,0,0.42);
     transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
   }
-  .btn:hover { filter: brightness(1.04); }
-  .btn:active {
+  .btn:hover:not(:disabled) { filter: brightness(1.04); }
+  .btn:active:not(:disabled) {
     transform: translateY(2px);
     box-shadow: 0 0 0 #a4854f, 0 3px 9px rgba(0,0,0,0.42);
   }
   .btn:focus-visible { outline: 3px solid #e6d2ab; outline-offset: 3px; }
+  .btn:disabled {
+    cursor: default;
+    opacity: 0.4;
+    box-shadow: 0 2px 0 #a4854f, 0 3px 8px rgba(0,0,0,0.3);
+  }
 
   /* load-in */
   @media (prefers-reduced-motion: no-preference) {
@@ -1212,6 +1217,7 @@
     let text = '';
     let label = '';
     let handler = null;
+    let disabled = false;
 
     switch (state.phase) {
       case 'openRoll':
@@ -1245,6 +1251,9 @@
         }
         label = 'Pass device';
         handler = passDevice;
+        // Can't skip a turn early — the pass button only opens up once the
+        // dice are spent or genuinely no legal move remains.
+        disabled = left.length > 0 && hasAnyLegalMove(state.current);
         break;
       }
       case 'gameover': {
@@ -1260,6 +1269,7 @@
     banner.innerHTML = text;
     action.textContent = label;
     action.onclick = handler;
+    action.disabled = disabled;
   }
 
   function renderTrays() {
