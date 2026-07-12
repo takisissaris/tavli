@@ -463,6 +463,7 @@
   }
   .dice-row.w { top: 67%; }   /* White's side (lower half) */
   .dice-row.b { top: 33%; }   /* Black's side (upper half) */
+  .dice-row.rotated { top: 67%; }   /* board is spun for black's turn — dice move to the near half too */
 
   .die {
     width: 8.6cqw;
@@ -657,6 +658,12 @@
   const BOTTOM_LEFT  = [12, 11, 10, 9, 8, 7];
   const BOTTOM_RIGHT = [6, 5, 4, 3, 2, 1];
 
+  // Point N's diametrically opposite point (13<->1, 24<->12, ...). Rendering a
+  // quadrant's points through this — rather than literally CSS-rotating the
+  // board — spins the whole layout 180° for pass-and-play while point-number
+  // labels and checker counts stay upright automatically.
+  const opp = (n) => n <= 12 ? n + 12 : n - 12;
+
   function buildQuad(pointNums, row, colOffset, turnMax) {
     const quad = document.createElement('div');
     quad.className = 'quad';
@@ -712,10 +719,11 @@
     return el;
   }
 
-  function buildBar(row) {
+  function buildBar(row, rotated) {
     const bar = document.createElement('div');
     bar.className = 'bar';
-    const color = row === 'top' ? 'b' : 'w';   // black rests on the top bar, white below
+    const top = row === 'top';
+    const color = rotated ? (top ? 'w' : 'b') : (top ? 'b' : 'w');
     const n = state.bar[color];
     const active = state.phase === 'rolled' && state.current === color && n > 0;
 
@@ -783,17 +791,23 @@
       ? maxDiceUsable(state, state.dice, state.current)
       : undefined;
 
+    // Pass-and-play: spin the whole board 180° on black's turn so whoever is
+    // about to move sees their own home board nearest them, matching how a
+    // physical board would look after being turned around the table.
+    const rotated = state.current === 'b';
+    const quadPts = (arr) => rotated ? arr.map(opp) : arr;
+
     const top = document.createElement('div');
     top.className = 'half top';
-    top.appendChild(buildQuad(TOP_LEFT, 'top', 0, turnMax));
-    top.appendChild(buildBar('top'));
-    top.appendChild(buildQuad(TOP_RIGHT, 'top', 6, turnMax));
+    top.appendChild(buildQuad(quadPts(TOP_LEFT), 'top', 0, turnMax));
+    top.appendChild(buildBar('top', rotated));
+    top.appendChild(buildQuad(quadPts(TOP_RIGHT), 'top', 6, turnMax));
 
     const bottom = document.createElement('div');
     bottom.className = 'half bottom';
-    bottom.appendChild(buildQuad(BOTTOM_LEFT, 'bottom', 0, turnMax));
-    bottom.appendChild(buildBar('bottom'));
-    bottom.appendChild(buildQuad(BOTTOM_RIGHT, 'bottom', 6, turnMax));
+    bottom.appendChild(buildQuad(quadPts(BOTTOM_LEFT), 'bottom', 0, turnMax));
+    bottom.appendChild(buildBar('bottom', rotated));
+    bottom.appendChild(buildQuad(quadPts(BOTTOM_RIGHT), 'bottom', 6, turnMax));
 
     play.appendChild(top);
     play.appendChild(bottom);
@@ -829,9 +843,9 @@
     return die;
   }
 
-  function diceRow(side, values, animate) {
+  function diceRow(side, values, animate, rotated) {
     const row = document.createElement('div');
-    row.className = `dice-row ${side}`;
+    row.className = `dice-row ${side}` + (rotated ? ' rotated' : '');
     values.forEach((v) => row.appendChild(makeDie(v, side, animate)));
     return row;
   }
@@ -845,7 +859,7 @@
       layer.appendChild(diceRow('w', [state.opening.w], animate));
       layer.appendChild(diceRow('b', [state.opening.b], animate));
     } else if (state.phase === 'rolled') {
-      layer.appendChild(diceRow(state.current, state.dice, animate));
+      layer.appendChild(diceRow(state.current, state.dice, animate, state.current === 'b'));
     }
     state.justRolled = false;
   }
@@ -1233,7 +1247,8 @@
                    typeof state.selected === 'number' &&
                    state.legal.includes('off');
 
-    [['b', 'top'], ['w', 'bottom']].forEach(([color, pos]) => {
+    const order = state.current === 'b' ? [['w', 'top'], ['b', 'bottom']] : [['b', 'top'], ['w', 'bottom']];
+    order.forEach(([color, pos]) => {
       const tray = document.createElement('div');
       tray.className = `tray ${color}`;
       if (canOff && state.current === color) {
