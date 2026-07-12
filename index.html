@@ -333,25 +333,6 @@
   .point.top .checker    { top: 1cqw; }
   .point.bottom .checker { bottom: 1cqw; }
 
-  /* Plakoto: a lone checker trapped under the covering stack — a hollow
-     ring in the trapped checker's own colour, sized to peek out from
-     behind the stack sitting on top of it. Sized to stay clear of a second
-     covering checker: stacking spaces checker centres 88cqw apart (up to
-     4 on the point), so the second checker's near edge sits 46cqw out from
-     the first — this ring's total reach (radius + shadow) must stay under
-     that or it visibly wraps around the second checker too. */
-  .checker.pinned {
-    z-index: 0;
-    width: 86cqw;
-    background: transparent;
-    /* border-box sizing means a thicker border adds visible ink without
-       pushing the outer edge (and so the overlap risk) out any further. */
-    border: 5.2cqw solid;
-    box-shadow: 0 0 0 1.5cqw rgba(245, 195, 80, 0.8);
-  }
-  .checker.pinned.w { border-color: var(--ivory-hi); }
-  .checker.pinned.b { border-color: var(--horn-hi); }
-
   /* ---------- Move interaction ---------- */
   .point.movable,
   .point.legal { cursor: pointer; }
@@ -746,14 +727,6 @@
     pip.textContent = num;
     el.appendChild(pip);
 
-    if (cell.pinned) {
-      el.title = `${NAME[cell.pinned]} checker pinned here`;
-      const p = document.createElement('div');
-      p.className = `checker ${cell.pinned} pinned`;
-      if (row === 'top') p.style.top = '1cqw'; else p.style.bottom = '1cqw';
-      el.appendChild(p);
-    }
-
     renderCheckers(el, row, cell);
 
     if (state.legal.includes(num)) {
@@ -801,31 +774,37 @@
     if (state.bar[state.current] > 0) selectOrigin('bar');
   }
 
+  // Plakoto: a pinned checker isn't drawn with any special marker — like on
+  // a physical board, it's just placed first, and the covering checkers
+  // stack on top of it in order, so it naturally peeks out from underneath.
   function renderCheckers(pointEl, row, cell) {
-    const { color, count } = cell;
-    if (!color || count === 0) return;
+    const { color, count, pinned } = cell;
+    const items = pinned ? [pinned, ...Array(count).fill(color)] : Array(count).fill(color);
+    if (items.length === 0) return;
+    if (pinned) pointEl.title = `${NAME[pinned]} checker pinned here`;
 
     // usable length along the point, expressed in cqw (relative to point width)
     const USABLE = 430;   // ~ point height in cqw
     const DIAM   = 84;
     const baseStep = 88;
-    const step = count > 1
-      ? Math.min(baseStep, (USABLE - DIAM) / (count - 1))
+    const step = items.length > 1
+      ? Math.min(baseStep, (USABLE - DIAM) / (items.length - 1))
       : 0;
 
     const overlapping = step < DIAM * 0.7;
 
-    for (let i = 0; i < count; i++) {
+    items.forEach((itemColor, i) => {
       const c = document.createElement('div');
-      c.className = `checker ${color}`;
+      c.className = `checker ${itemColor}`;
       const offset = `${1 + i * step}cqw`;
       if (row === 'top') c.style.top = offset;
       else               c.style.bottom = offset;
       c.style.zIndex = 1 + i;
-      // when stacked tightly, only label the outermost checker with the count
-      if (overlapping && i === count - 1) c.textContent = count;
+      // when stacked tightly, only label the outermost checker with the
+      // owner's own count (the pinned checker underneath isn't part of it)
+      if (overlapping && i === items.length - 1) c.textContent = count;
       pointEl.appendChild(c);
-    }
+    });
   }
 
   function render() {
