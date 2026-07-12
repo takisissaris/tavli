@@ -543,6 +543,26 @@
       from { opacity: 0; transform: translateY(10px) scale(0.992); }
       to   { opacity: 1; transform: none; }
     }
+    /* Plakoto: a one-shot glow on the instant a checker gets pinned — not a
+       lasting marker (the checker settles back to looking perfectly plain),
+       just a beat of feedback for the moment itself. drop-shadow rather than
+       box-shadow so it doesn't fight the checker's own glossy inset shadows;
+       transform keeps the base translateX(-50%) centering intact throughout. */
+    .checker.just-pinned { animation: pinned-flash 900ms ease-out both; }
+    @keyframes pinned-flash {
+      0% {
+        transform: translateX(-50%) scale(1);
+        filter: drop-shadow(0 0 0 rgba(20,12,6,0)) drop-shadow(0 0 0 rgba(245,195,80,0));
+      }
+      30% {
+        transform: translateX(-50%) scale(1.18);
+        filter: drop-shadow(0 0 1.5cqw rgba(20,12,6,0.55)) drop-shadow(0 0 6cqw rgba(245,195,80,1));
+      }
+      100% {
+        transform: translateX(-50%) scale(1);
+        filter: drop-shadow(0 0 0 rgba(20,12,6,0)) drop-shadow(0 0 0 rgba(245,195,80,0));
+      }
+    }
   }
 </style>
 </head>
@@ -619,6 +639,7 @@
     selected: null,      // origin point currently picked up
     legal: [],           // legal destination points for the selection
     justRolled: false,   // animate dice only on the roll itself
+    justPinned: null,    // point number to flash once, right after a Plakoto pin
     result: null,        // { winner, kind, pts } once a game ends
     screen: 'menu',      // 'menu' | 'opponent' | 'game'
     variant: null,       // active game id
@@ -727,7 +748,7 @@
     pip.textContent = num;
     el.appendChild(pip);
 
-    renderCheckers(el, row, cell);
+    renderCheckers(el, row, cell, num === state.justPinned);
 
     if (state.legal.includes(num)) {
       const t = document.createElement('div');
@@ -777,7 +798,9 @@
   // Plakoto: a pinned checker isn't drawn with any special marker — like on
   // a physical board, it's just placed first, and the covering checkers
   // stack on top of it in order, so it naturally peeks out from underneath.
-  function renderCheckers(pointEl, row, cell) {
+  // The one exception is `justPinned`: a brief one-shot flash on the instant
+  // it happens, not a lasting marker, just so the moment itself reads clearly.
+  function renderCheckers(pointEl, row, cell, justPinned) {
     const { color, count, pinned } = cell;
     const items = pinned ? [pinned, ...Array(count).fill(color)] : Array(count).fill(color);
     if (items.length === 0) return;
@@ -796,6 +819,7 @@
     items.forEach((itemColor, i) => {
       const c = document.createElement('div');
       c.className = `checker ${itemColor}`;
+      if (justPinned && pinned && i === 0) c.classList.add('just-pinned');
       const offset = `${1 + i * step}cqw`;
       if (row === 'top') c.style.top = offset;
       else               c.style.bottom = offset;
@@ -842,6 +866,8 @@
     diceLayer.className = 'dice-layer';
     diceLayer.id = 'diceLayer';
     play.appendChild(diceLayer);
+
+    state.justPinned = null;
   }
 
   // ---- Dice ----
@@ -1200,6 +1226,7 @@
       state.off[color] += 1;
       state.openingWin = false;
       state.justRolled = false;
+      state.justPinned = null;
       clearSelection();
       if (state.off[color] === 15) { endGame(color); return; }
       refresh();
@@ -1221,10 +1248,16 @@
     const idx = state.dice.indexOf(die);
     if (idx !== -1) state.dice.splice(idx, 1);
 
+    // Same landing condition applyMoveAt uses to decide whether to pin —
+    // checked here, before the mutation, so we know whether to flash it.
+    const to = state.points[dest];
+    const willPin = state.variant === 'plakoto' && to.color === other(color) && to.count === 1;
+
     applyMoveAt(state, origin, dest, color);
 
     state.openingWin = false;
     state.justRolled = false;
+    state.justPinned = willPin ? dest : null;
     clearSelection();
     refresh();
   }
@@ -1364,10 +1397,11 @@
     } catch (e) {
       return;
     }
-    // Never resume mid-selection or with a stale "just rolled" animation flag.
+    // Never resume mid-selection or with a stale one-shot animation flag.
     state.selected = null;
     state.legal = [];
     state.justRolled = false;
+    state.justPinned = null;
   }
 
   // ---- Undo ----
@@ -1387,6 +1421,7 @@
     state.selected = null;
     state.legal = [];
     state.justRolled = false;
+    state.justPinned = null;
     refresh();
   }
 
