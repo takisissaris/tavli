@@ -429,6 +429,23 @@
   /* checkers resting on the bar (bar is not a size container, so size vs. board) */
   .checker.onbar { width: 5.4cqw; font-size: 2.4cqw; }
   .bar.movable { cursor: pointer; }
+
+  /* A transient clone that flies from a move's origin to its destination —
+     appended to <body> (never inside .tavli/.point, which are container-type
+     query containers and would otherwise become its fixed-position anchor)
+     and removed the instant its own WAAPI animation finishes. The board
+     underneath already shows the final position throughout; this just
+     narrates how the checker got there. */
+  .checker.ghost {
+    position: fixed;
+    left: 0;
+    top: 0;
+    margin: 0;
+    z-index: 9999;
+    pointer-events: none;
+    box-shadow: 0 0.4em 1em rgba(0,0,0,0.45);
+  }
+
   .bar.selected .checker:last-of-type {
     filter: drop-shadow(0 0 1.6cqw rgba(245,225,170,0.95));
   }
@@ -630,6 +647,25 @@
         transform: translateX(-50%) scale(1);
         filter: drop-shadow(0 0 0 rgba(20,12,6,0)) drop-shadow(0 0 0 rgba(245,195,80,0));
       }
+    }
+    /* Portes: the bar itself flashes red the instant a hit checker's flight
+       lands, so getting hit reads as distinct from a checker calmly entering. */
+    .bar.bar-hit { animation: bar-hit-flash 500ms ease-out; }
+    @keyframes bar-hit-flash {
+      0%, 100% {
+        box-shadow: inset 0.2cqw 0 0.4cqw rgba(0,0,0,0.5), inset -0.2cqw 0 0.4cqw rgba(0,0,0,0.5);
+      }
+      30% {
+        box-shadow: inset 0 0 0 3cqw rgba(224,80,58,0.6), 0 0 3cqw 0.6cqw rgba(224,80,58,0.55);
+      }
+    }
+    /* A brief fade/lift whenever the banner's text actually changes, so
+       rolling, passing, and turn-changes register even though the button
+       click itself is silent. */
+    .banner.flash { animation: banner-flash 260ms ease-out; }
+    @keyframes banner-flash {
+      0%   { opacity: 0.2; transform: translateY(-3px); }
+      100% { opacity: 1;   transform: translateY(0); }
     }
   }
 </style>
@@ -863,6 +899,7 @@
     bar.className = 'bar';
     const top = row === 'top';
     const color = rotated ? (top ? 'w' : 'b') : (top ? 'b' : 'w');
+    bar.dataset.color = color;
     const n = state.bar[color];
     const active = state.phase === 'rolled' && !isBotTurn() && state.current === color && n > 0;
 
@@ -1320,9 +1357,85 @@
     state.legal = [];
   }
 
+  // ---- Move animation ----
+  // A move re-renders the whole board instantly (render() rebuilds it from
+  // scratch each time), which is precisely why it can feel like nothing
+  // happened. To narrate it without teetering the rest of the app on a
+  // stable per-checker DOM identity, a disposable clone flies from where
+  // the move started to where it ended — measured in real screen pixels
+  // before the mutation and again after refresh() — then removes itself.
+  // The board underneath is already correct throughout; this is purely
+  // decorative, so it's skipped outright under reduced motion.
+  const reduceMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const pointElByNum = (num) => document.querySelector(`.point[data-point="${num}"]`);
+  const barElByColor = (color) => document.querySelector(`.bar[data-color="${color}"]`);
+  function lastCheckerIn(container) {
+    if (!container) return null;
+    const list = container.querySelectorAll('.checker');
+    return list.length ? list[list.length - 1] : container;
+  }
+
+  function ghostFly(color, fromRect, toRect, opts = {}) {
+    if (!fromRect || !toRect || reduceMotion()) return;
+    const ghost = document.createElement('div');
+    ghost.className = `checker ${color} ghost`;
+    ghost.style.left = `${fromRect.left}px`;
+    ghost.style.top = `${fromRect.top}px`;
+    ghost.style.width = `${fromRect.width}px`;
+    ghost.style.height = `${fromRect.height}px`;
+    document.body.appendChild(ghost);
+
+    const dx = (toRect.left + toRect.width / 2) - (fromRect.left + fromRect.width / 2);
+    const dy = (toRect.top + toRect.height / 2) - (fromRect.top + fromRect.height / 2);
+    const endScale = opts.shrink ? 0.35 : 1;
+    const anim = ghost.animate(
+      [
+        { transform: 'translate(0, 0) scale(1)', opacity: 1 },
+        { transform: `translate(${dx}px, ${dy}px) scale(${endScale})`, opacity: opts.shrink ? 0 : 1 },
+      ],
+      { duration: opts.duration || 300, easing: 'cubic-bezier(0.32, 0.6, 0.3, 1)' }
+    );
+    const cleanup = () => ghost.remove();
+    anim.addEventListener('finish', cleanup);
+    anim.addEventListener('cancel', cleanup);
+    if (opts.onFinish) anim.addEventListener('finish', opts.onFinish, { once: true });
+  }
+
+  // The bar flashes red the instant a hit checker's flight lands, so being
+  // hit reads as distinct from a checker just calmly entering it.
+  function flashBarHit(color) {
+    if (reduceMotion()) return;
+    const bar = barElByColor(color);
+    if (!bar) return;
+    bar.classList.add('bar-hit');
+    setTimeout(() => bar.classList.remove('bar-hit'), 500);
+  }
+
   function performMove(origin, dest) {
     pushHistory();
     const color = state.current;
+
+    // Measuring rects forces a synchronous layout, so skip it entirely (not
+    // just the animation playback) when the user won't see it anyway — the
+    // fuzz-tested engine and a reduced-motion player both call performMove
+    // at a pace where that cost would otherwise add up for nothing.
+    const animate = !reduceMotion();
+
+    const fromContainer = animate ? (origin === 'bar' ? barElByColor(color) : pointElByNum(origin)) : null;
+    const fromRect = fromContainer ? lastCheckerIn(fromContainer).getBoundingClientRect() : null;
+
+    // A hit (Portes) sends a lone enemy checker to the bar — captured here,
+    // before the mutation, so it can fly there too. Plakoto pins in place
+    // instead (no bar trip), and already gets its own flash via justPinned.
+    let hitColor = null, hitFromRect = null;
+    if (animate && dest !== 'off' && state.variant !== 'plakoto') {
+      const target = state.points[dest];
+      if (target.color === other(color) && target.count === 1) {
+        hitColor = target.color;
+        const hitContainer = pointElByNum(dest);
+        hitFromRect = hitContainer ? lastCheckerIn(hitContainer).getBoundingClientRect() : null;
+      }
+    }
 
     if (dest === 'off') {
       const die = bearOffDieFor(origin, color);
@@ -1334,8 +1447,14 @@
       state.justRolled = false;
       state.justPinned = null;
       clearSelection();
-      if (state.off[color] === 15) { endGame(color); return; }
+      const flyOff = () => {
+        if (!animate) return;
+        const toEl = document.querySelector(`.off-chip.${color}`);
+        if (toEl) ghostFly(color, fromRect, toEl.getBoundingClientRect(), { shrink: true, duration: 380 });
+      };
+      if (state.off[color] === 15) { endGame(color); flyOff(); return; }
       refresh();
+      flyOff();
       return;
     }
 
@@ -1366,6 +1485,17 @@
     state.justPinned = willPin ? dest : null;
     clearSelection();
     refresh();
+
+    if (!animate) return;
+    const toEl = pointElByNum(dest);
+    if (fromRect && toEl) ghostFly(color, fromRect, lastCheckerIn(toEl).getBoundingClientRect());
+    if (hitColor && hitFromRect) {
+      const barTarget = barElByColor(hitColor);
+      if (barTarget) {
+        ghostFly(hitColor, hitFromRect, lastCheckerIn(barTarget).getBoundingClientRect(),
+          { duration: 380, onFinish: () => flashBarHit(hitColor) });
+      }
+    }
   }
 
   // ---- Controls / banner ----
@@ -1439,7 +1569,16 @@
         : `${who(state.current)} is thinking…`;
     }
 
-    banner.innerHTML = text;
+    if (banner.innerHTML !== text) {
+      banner.innerHTML = text;
+      banner.classList.remove('flash');
+      if (!reduceMotion()) {
+        // Force a reflow so re-adding the class restarts the animation even
+        // if the banner already flashed very recently.
+        void banner.offsetWidth;
+        banner.classList.add('flash');
+      }
+    }
     action.textContent = label;
     action.onclick = handler;
     action.disabled = disabled;
